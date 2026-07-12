@@ -26,7 +26,7 @@ struct StokeholdApp: App {
     @StateObject private var model = BoilerModel()
 
     var body: some Scene {
-        MenuBarExtra(BlackGang.glanceLabel(for: model.reading)) {
+        MenuBarExtra {
             VStack(alignment: .leading, spacing: 10) {
                 Text("stokehold")
                     .font(.headline)
@@ -45,6 +45,8 @@ struct StokeholdApp: App {
             }
             .padding()
             .frame(width: 240)
+        } label: {
+            MenuBarGaugeLabel(reading: model.reading)
         }
     }
 }

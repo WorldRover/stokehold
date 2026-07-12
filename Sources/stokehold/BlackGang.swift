@@ -6,6 +6,21 @@ enum BlackGang {
         "\(Int(reading.cpuPercent.rounded())) psi"
     }
 
+    /// The SF Symbol whose needle position best tracks `percent` — the
+    /// `gauge.with.dots.needle.*percent` family only ships discrete steps
+    /// (0/33/50/67/100, verified present on this system), so this picks the
+    /// nearest one rather than pretending to a continuous needle position.
+    static func gaugeSymbolName(for percent: Double) -> String {
+        let steps: [(Double, String)] = [
+            (0, "gauge.with.dots.needle.0percent"),
+            (33, "gauge.with.dots.needle.33percent"),
+            (50, "gauge.with.dots.needle.50percent"),
+            (67, "gauge.with.dots.needle.67percent"),
+            (100, "gauge.with.dots.needle.100percent"),
+        ]
+        return steps.min(by: { abs($0.0 - percent) < abs($1.0 - percent) })!.1
+    }
+
     static func statusLine(for reading: BoilerReading) -> String {
         switch (reading.fleetCount, reading.cpuPercent) {
         case (0, ..<15):

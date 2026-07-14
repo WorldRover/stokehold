@@ -6,8 +6,10 @@ final class BoilerModel: ObservableObject {
         cpuPercent: 0, ramPercent: 0, load1: 0,
         fleetCount: 0, fleetCPUPercent: 0, fleetRAMPercent: 0
     )
+    @Published var fleet: FleetSnapshot?
 
     private var loop: Task<Void, Never>?
+    private var fleetLoop: Task<Void, Never>?
 
     init() {
         loop = Task { [weak self] in
@@ -16,6 +18,19 @@ final class BoilerModel: ObservableObject {
                 guard let self else { return }
                 self.reading = sample
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+        // Fleet-console data comes from a python subprocess (read-only reuse
+        // of console.py) rather than a process scan, so it's polled on its
+        // own slower cadence — no reason to pay that spawn cost every 2s.
+        fleetLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                let snapshot = await Task.detached { FleetConsole.sample() }.value
+                guard let self else { return }
+                if let snapshot {
+                    self.fleet = snapshot
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }
@@ -42,9 +57,13 @@ struct StokeholdApp: App {
                 Text(BlackGang.statusLine(for: model.reading))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Divider()
+
+                FleetSummaryView(fleet: model.fleet)
             }
             .padding()
-            .frame(width: 240)
+            .frame(width: 300)
         } label: {
             MenuBarGaugeLabel(reading: model.reading)
         }

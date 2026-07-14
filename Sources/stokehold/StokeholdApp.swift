@@ -7,6 +7,12 @@ final class BoilerModel: ObservableObject {
         fleetCount: 0, fleetCPUPercent: 0, fleetRAMPercent: 0
     )
     @Published var fleet: FleetSnapshot?
+    // d191: `FleetConsole.sample()` returns nil on any subprocess failure
+    // (non-zero exit, unparseable JSON) and the loop below used to just skip
+    // the update — leaving `fleet` frozen on whatever snapshot last
+    // succeeded, with no indication it had gone stale. Track that here so
+    // the UI can say so instead of quietly showing old crew state as live.
+    @Published var fleetStale: Bool = false
 
     private var loop: Task<Void, Never>?
     private var fleetLoop: Task<Void, Never>?
@@ -29,6 +35,9 @@ final class BoilerModel: ObservableObject {
                 guard let self else { return }
                 if let snapshot {
                     self.fleet = snapshot
+                    self.fleetStale = false
+                } else if self.fleet != nil {
+                    self.fleetStale = true
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
@@ -60,7 +69,7 @@ struct StokeholdApp: App {
 
                 Divider()
 
-                FleetSummaryView(fleet: model.fleet)
+                FleetSummaryView(fleet: model.fleet, stale: model.fleetStale)
             }
             .padding(10)
             .frame(width: 250)

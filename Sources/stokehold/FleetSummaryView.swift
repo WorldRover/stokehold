@@ -13,6 +13,7 @@ import SwiftUI
 /// array entirely, so nothing but real content ever takes up space.
 struct FleetSummaryView: View {
     let fleet: FleetSnapshot?
+    let stale: Bool
 
     private struct Row: Identifiable {
         let id: String
@@ -25,9 +26,19 @@ struct FleetSummaryView: View {
     var body: some View {
         if let fleet {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Fleet")
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                HStack(spacing: 4) {
+                    Text("Fleet")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    // d191: the last successful sample can be arbitrarily old
+                    // if the console subprocess keeps failing — say so rather
+                    // than let a frozen crew line read as live state.
+                    if stale {
+                        Text("(stale)")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
 
                 crewLine(for: fleet)
 

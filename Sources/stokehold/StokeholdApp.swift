@@ -42,11 +42,11 @@ struct StokeholdApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("stokehold")
                     .font(.headline)
 
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     PressureGauge(label: "CPU", value: model.reading.cpuPercent, dangerThreshold: 80)
                     PressureGauge(label: "RAM", value: model.reading.ramPercent, dangerThreshold: 85)
                     PressureGauge(label: "LOAD", value: min(model.reading.load1 * 25, 100), dangerThreshold: 80)
@@ -62,8 +62,8 @@ struct StokeholdApp: App {
 
                 FleetSummaryView(fleet: model.fleet)
             }
-            .padding()
-            .frame(width: 300)
+            .padding(10)
+            .frame(width: 250)
         } label: {
             MenuBarGaugeLabel(reading: model.reading)
         }

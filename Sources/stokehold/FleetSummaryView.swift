@@ -5,27 +5,50 @@ import SwiftUI
 /// Dispatches, items needing Dan, and the review shelf. Renders from a
 /// `FleetSnapshot` (see `FleetConsole.swift`); shows nothing while the first
 /// sample is still in flight rather than a misleading zeroed-out section.
+///
+/// Rows are built into a plain array and rendered via `ForEach` rather than a
+/// stack of `if count > 0 { ... }` siblings — an empty conditional branch can
+/// still reserve a VStack spacing slot, which is exactly the dead vertical
+/// gap Dan flagged (d184). Hidden (zero-count) sections are dropped from the
+/// array entirely, so nothing but real content ever takes up space.
 struct FleetSummaryView: View {
     let fleet: FleetSnapshot?
 
+    private struct Row: Identifiable {
+        let id: String
+        let count: Int
+        let label: String
+        let items: [String]
+        let highlight: Bool
+    }
+
     var body: some View {
         if let fleet {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Fleet")
-                    .font(.headline)
+                    .font(.caption)
+                    .fontWeight(.semibold)
 
                 crewLine(for: fleet)
 
-                summaryRow(count: fleet.missions.count, label: "active mission", items: fleet.missions)
-                summaryRow(count: fleet.dispatchCount, label: "pending dispatch")
-                summaryRow(count: fleet.needsDan.count, label: "item needs Dan", items: fleet.needsDan, highlight: true)
-                summaryRow(count: fleet.reviewShelf.count, label: "on the review shelf", items: fleet.reviewShelf)
+                ForEach(rows(for: fleet)) { row in
+                    rowView(row)
+                }
             }
         } else {
             Text("Fleet — reading…")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func rows(for fleet: FleetSnapshot) -> [Row] {
+        [
+            Row(id: "missions", count: fleet.missions.count, label: "active mission", items: fleet.missions, highlight: false),
+            Row(id: "dispatch", count: fleet.dispatchCount, label: "pending dispatch", items: [], highlight: false),
+            Row(id: "needsDan", count: fleet.needsDan.count, label: "item needs Dan", items: fleet.needsDan, highlight: true),
+            Row(id: "review", count: fleet.reviewShelf.count, label: "on the review shelf", items: fleet.reviewShelf, highlight: false),
+        ].filter { $0.count > 0 }
     }
 
     private func crewLine(for fleet: FleetSnapshot) -> some View {
@@ -33,31 +56,28 @@ struct FleetSummaryView: View {
         let blocked = fleet.blockedCount
         let headless = fleet.headlessStandbyCount
         return Text("\(fleet.crewCount) crew — \(working) working · \(blocked) blocked · \(headless) headless standby")
-            .font(.caption)
+            .font(.caption2)
             .foregroundStyle(blocked > 0 ? .red : .secondary)
     }
 
     /// A count line, with up to 2 preview items underneath when present —
     /// bounded so the dropdown can't grow into a full console dump.
-    @ViewBuilder
-    private func summaryRow(count: Int, label: String, items: [String] = [], highlight: Bool = false) -> some View {
-        if count > 0 {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(count) \(label)\(count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(highlight ? .orange : .primary)
-                ForEach(items.prefix(2), id: \.self) { item in
-                    Text("· \(item)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                if items.count > 2 {
-                    Text("+ \(items.count - 2) more")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+    private func rowView(_ row: Row) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(row.count) \(row.label)\(row.count == 1 ? "" : "s")")
+                .font(.caption2)
+                .foregroundStyle(row.highlight ? .orange : .primary)
+            ForEach(row.items.prefix(2), id: \.self) { item in
+                Text("· \(item)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            if row.items.count > 2 {
+                Text("+ \(row.items.count - 2) more")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
             }
         }
     }

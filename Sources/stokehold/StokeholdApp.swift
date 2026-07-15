@@ -4,7 +4,7 @@ import SwiftUI
 final class BoilerModel: ObservableObject {
     @Published var reading = BoilerReading(
         cpuPercent: 0, ramPercent: 0, load1: 0,
-        fleetCount: 0, fleetCPUPercent: 0, fleetRAMPercent: 0
+        fleetCPUPercent: 0, fleetRAMPercent: 0
     )
     @Published var fleet: FleetSnapshot?
     // d191: `FleetConsole.sample()` returns nil on any subprocess failure
@@ -63,7 +63,7 @@ struct StokeholdApp: App {
 
                 Divider()
 
-                Text(BlackGang.statusLine(for: model.reading))
+                Text(BlackGang.statusLine(for: model.reading, hands: model.fleet?.crewCount))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

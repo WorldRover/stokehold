@@ -18,6 +18,13 @@ import SwiftUI
 /// bridge — `FleetSnapshot.needsDan` already carries exactly this signal
 /// today (feeding `FleetSummaryView`'s dropdown row), so no new
 /// subprocess call or python script was needed for this feature at all.
+///
+/// d300: the feed is append-only, so a REVIEWED doc used to look
+/// identical to an unreviewed one in the sidebar — implying action that
+/// was already done. Active (non-archived) files render below the pinned
+/// Docket row; archiving (a per-item, Dan-only DECISION — see
+/// `ArchiveStore`'s doc comment) moves a file into a collapsible
+/// "Archived" section at the bottom, never deleted, always reachable.
 struct ChartRoomView: View {
     @ObservedObject var model: PresentationsModel
     /// Sourced from `BoilerModel.fleet?.needsDan` — the SAME FleetConsole
@@ -32,6 +39,15 @@ struct ChartRoomView: View {
 
     private static let docketTag = "__docket__"
     @State private var selectedTag: String?
+    @State private var archivedSectionExpanded = false
+
+    private var activeFiles: [PresentationFile] {
+        model.files.filter { !ArchiveStore.isArchived($0) }
+    }
+
+    private var archivedFiles: [PresentationFile] {
+        model.files.filter { ArchiveStore.isArchived($0) }
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -48,12 +64,25 @@ struct ChartRoomView: View {
 
     private var sidebar: some View {
         List(selection: $selectedTag) {
+            // Pinned unconditionally — a Dan-facing "what needs me" surface
+            // must be visible even with zero presentations in the feed yet.
             docketRow
-            if !model.files.isEmpty {
+            if !activeFiles.isEmpty {
                 Section {
-                    ForEach(model.files) { file in
-                        fileRow(file)
+                    ForEach(activeFiles) { file in
+                        fileRow(file, archived: false)
                     }
+                }
+            }
+            if !archivedFiles.isEmpty {
+                DisclosureGroup(isExpanded: $archivedSectionExpanded) {
+                    ForEach(archivedFiles) { file in
+                        fileRow(file, archived: true)
+                    }
+                } label: {
+                    Text("Archived (\(archivedFiles.count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -83,19 +112,25 @@ struct ChartRoomView: View {
         .tag(Self.docketTag)
     }
 
-    private func fileRow(_ file: PresentationFile) -> some View {
+    private func fileRow(_ file: PresentationFile, archived: Bool) -> some View {
         HStack {
             Text(file.displayName)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .foregroundStyle(archived ? .secondary : .primary)
             Spacer()
-            if !SeenStore.isSeen(file) {
+            if !archived, !SeenStore.isSeen(file) {
                 Circle()
                     .fill(.red)
                     .frame(width: 6, height: 6)
             }
         }
         .tag(file.id)
+        .contextMenu {
+            Button(archived ? "Unarchive" : "Archive") {
+                model.setArchived(file, archived: !archived)
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -120,9 +155,9 @@ struct ChartRoomView: View {
             fileDetail(file)
         } else if let file = model.selected {
             // Initial state: PresentationsModel auto-selects the newest
-            // file before the sidebar's own selection binding has fired
-            // once — falls through to it so the detail pane isn't blank
-            // on first launch.
+            // ACTIVE file before the sidebar's own selection binding has
+            // fired once — falls through to it so the detail pane isn't
+            // blank on first launch.
             fileDetail(file)
         } else {
             emptyState
@@ -167,7 +202,8 @@ struct ChartRoomView: View {
     }
 
     private func fileDetail(_ file: PresentationFile) -> some View {
-        Group {
+        let isArchived = ArchiveStore.isArchived(file)
+        return Group {
             if file.isHTML {
                 HTMLPreviewView(url: file.url)
             } else {
@@ -179,6 +215,15 @@ struct ChartRoomView: View {
             }
         }
         .navigationTitle(file.displayName)
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    model.setArchived(file, archived: !isArchived)
+                } label: {
+                    Label(isArchived ? "Unarchive" : "Archive", systemImage: isArchived ? "tray.and.arrow.up" : "archivebox")
+                }
+            }
+        }
     }
 
     @ViewBuilder

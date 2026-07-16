@@ -9,8 +9,8 @@ import Foundation
 /// panel columns (id / priority / text / Linear mapping / owner). `pri`
 /// and `linearId` come from bosun/annunciator's own canonical helpers —
 /// NOT re-derived here — and `needsDan` is a tag computed against
-/// `bosun.current_needs_dan_items`'s own id set (the one classifier per
-/// d324/d327), not a second independent "is this for Dan" check. This is
+/// `bosun.dan_owned_open_items`'s own id set (the one owner-field filter
+/// per d324/d327/d333), not a second independent "is this for Dan" check. This is
 /// what lets the panel's Dan-only/all filter be a pure client-side toggle
 /// on ONE poll result rather than two separately-derived lists that could
 /// silently disagree.
@@ -76,11 +76,11 @@ enum FleetConsole {
         from config import load_config
         from console import load_console_data, dispatch_lines, clean_marker
         from docket import load_items, item_sort_key, RESOLVED_STATUS
-        from bosun import current_needs_dan_items
+        from bosun import dan_owned_open_items
         from annunciator import docket_linear_id
         config = load_config("\(pmviewConfig)")
         data = load_console_data(config)
-        needs_dan_ids = {item["id"] for item in current_needs_dan_items(config)}
+        needs_dan_ids = {item["id"] for item in dan_owned_open_items(config)}
         live_items = [
             item for item in load_items(config)
             if str(item.get("status") or "open").strip().lower() not in (RESOLVED_STATUS | {"archived"})

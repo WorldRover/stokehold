@@ -27,19 +27,33 @@ import SwiftUI
 /// "Archived" section at the bottom, never deleted, always reachable.
 struct ChartRoomView: View {
     @ObservedObject var model: PresentationsModel
-    /// Sourced from `BoilerModel.fleet?.needsDan` — the SAME FleetConsole
+    /// Sourced from `BoilerModel.fleet?.docketRows` — the SAME FleetConsole
     /// poll the menubar dropdown's Fleet section already reads (5s
     /// cadence), not a second independent subprocess-polling loop. Two
     /// pollers hitting the same python subprocess on two different timers
     /// would risk exactly the "one signal, many DERIVATIONS" bug class
     /// this feature is explicitly built to avoid, even sourced from the
     /// same underlying function — one poll loop, one in-memory value, two
-    /// UI surfaces reading it.
-    let needsDanItems: [String]
+    /// UI surfaces reading it. Each row already carries its own `needsDan`
+    /// tag (computed server-side against bosun's canonical classifier, see
+    /// `DocketRow`'s doc comment) — the Dan/All filter below is a pure
+    /// client-side toggle over ONE list, not two separately-polled ones.
+    let docketRows: [DocketRow]
 
     private static let docketTag = "__docket__"
     @State private var selectedTag: String?
     @State private var archivedSectionExpanded = false
+    /// d298 rework: default Dan-only, matching the panel's original pinned
+    /// behavior — "All" is an opt-in broader view, not the default noise.
+    @State private var showAllDocket = false
+
+    private var visibleDocketRows: [DocketRow] {
+        showAllDocket ? docketRows : docketRows.filter(\.needsDan)
+    }
+
+    private var needsDanCount: Int {
+        docketRows.filter(\.needsDan).count
+    }
 
     private var activeFiles: [PresentationFile] {
         model.files.filter { !ArchiveStore.isArchived($0) }
@@ -99,8 +113,8 @@ struct ChartRoomView: View {
             Image(systemName: "list.bullet.clipboard")
             Text("Docket")
             Spacer()
-            if !needsDanItems.isEmpty {
-                Text("\(needsDanItems.count)")
+            if needsDanCount > 0 {
+                Text("\(needsDanCount)")
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundStyle(.white)
@@ -165,43 +179,90 @@ struct ChartRoomView: View {
     }
 
     private var docketDetail: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                if needsDanItems.isEmpty {
-                    Text("Nothing open for Dan right now.")
-                        .foregroundStyle(.secondary)
-                        .padding()
-                } else {
-                    // d298: needs-dan items are already-formatted display
-                    // strings from console.needs_dan_items() itself (e.g.
-                    // "d298 — CHART ROOM ... · action: decide or approve"),
-                    // not structured data — a plain native List of rows is
-                    // the natural fit, not markdown. Each item is already
-                    // exactly the ONE line console.py itself renders under
-                    // "Needs-Dan"; reformatting it into markdown just to
-                    // feed MarkdownBodyView's block-parser would be
-                    // re-deriving presentation from presentation for no
-                    // benefit — there's no heading/list/table structure
-                    // here to gain from that machinery.
-                    ForEach(Array(needsDanItems.enumerated()), id: \.offset) { _, item in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 5))
-                                .foregroundStyle(.orange)
-                                .padding(.top, 6)
-                            Text(item)
-                                // d303: docket rows carry docket ids, commit
-                                // SHAs, URLs — same copy need as the reader.
-                                .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("", selection: $showAllDocket) {
+                Text("Dan").tag(false)
+                Text("All").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 160)
+            .padding([.horizontal, .top])
+            .padding(.bottom, 8)
+
+            if visibleDocketRows.isEmpty {
+                Text(showAllDocket ? "Docket is empty." : "Nothing open for Dan right now.")
+                    .foregroundStyle(.secondary)
+                    .padding()
+                Spacer()
+            } else {
+                // d298 rework: shaped like the docket itself — id | priority
+                // | text | Linear mapping | owner, single-line rows — not
+                // the flat "id — text" strings the panel started with.
+                // Structured `DocketRow`s from the FleetConsole bridge, not
+                // a re-parse of console's formatted display strings.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleDocketRows) { row in
+                            docketRowView(row)
+                            Divider()
                         }
-                        .padding(.vertical, 2)
                     }
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle("Docket — Needs Dan")
+        .navigationTitle("Docket")
+    }
+
+    private func docketRowView(_ row: DocketRow) -> some View {
+        HStack(spacing: 8) {
+            priorityIcon(for: row.pri)
+            Text(row.id)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .leading)
+            Text(row.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                // d303: docket rows carry docket ids, commit SHAs, URLs —
+                // same copy need as the reader itself.
+                .textSelection(.enabled)
+            Spacer(minLength: 8)
+            if !row.linearId.isEmpty {
+                Text(row.linearId)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.blue.opacity(0.12)))
+            }
+            if !row.owner.isEmpty {
+                Text(row.owner)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 64, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 5)
+    }
+
+    private func priorityIcon(for pri: String) -> some View {
+        let spec: (symbol: String, color: Color) = {
+            switch pri {
+            case "U": return ("exclamationmark.3", .red)
+            case "H": return ("arrow.up.circle.fill", .orange)
+            case "L": return ("circle", .secondary)
+            case "P": return ("moon.zzz.fill", .secondary)
+            default: return ("circle.fill", .yellow) // "M" and any unrecognized code
+            }
+        }()
+        return Image(systemName: spec.symbol)
+            .font(.caption)
+            .foregroundStyle(spec.color)
+            .frame(width: 16)
     }
 
     private func fileDetail(_ file: PresentationFile) -> some View {

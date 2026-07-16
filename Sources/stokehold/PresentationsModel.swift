@@ -59,6 +59,43 @@ enum SeenStore {
     }
 }
 
+/// d300: "archived" is a DECISION (Dan is done with an item), deliberately
+/// a SEPARATE store from `SeenStore`'s passive "he opened it" — conflating
+/// the two would auto-archive anything merely glanced at, recreating the
+/// exact complaint this feature exists to fix in reverse. A dedicated
+/// per-item action (not a byproduct of viewing), a dedicated key.
+///
+/// Keyed path+mtime, the SAME scheme `SeenStore` uses, deliberately: a
+/// regenerated doc (same path, refreshed content, new mtime — e.g. Dan
+/// noted "d290 rev4, d235 chart-first, d302 final" as real recurring
+/// examples) no longer matches its old archive key once its mtime
+/// changes, so it naturally resurfaces as unarchived — no special-case
+/// "was this content actually different" logic needed, the existing
+/// keying scheme already gives the right behavior for free.
+enum ArchiveStore {
+    private static let defaultsKey = "chartRoomArchivedFiles"
+
+    private static func archiveKey(for file: PresentationFile) -> String {
+        "\(file.url.path)#\(file.mtime.timeIntervalSince1970)"
+    }
+
+    static func isArchived(_ file: PresentationFile) -> Bool {
+        let archived = UserDefaults.standard.stringArray(forKey: defaultsKey) ?? []
+        return archived.contains(archiveKey(for: file))
+    }
+
+    static func setArchived(_ file: PresentationFile, archived: Bool) {
+        var set = Set(UserDefaults.standard.stringArray(forKey: defaultsKey) ?? [])
+        let key = archiveKey(for: file)
+        if archived {
+            set.insert(key)
+        } else {
+            set.remove(key)
+        }
+        UserDefaults.standard.set(Array(set), forKey: defaultsKey)
+    }
+}
+
 /// d253: the Chart Room's data model — lists the presentations directory
 /// on a timer poll, same idiom `BoilerModel`/`FleetConsole`'s own loops in
 /// `StokeholdApp.swift` already use (no push mechanism exists anywhere in
@@ -111,8 +148,13 @@ final class PresentationsModel: ObservableObject {
         .sorted { $0.url.lastPathComponent > $1.url.lastPathComponent }
 
         files = fresh
-        if selected == nil, let first = fresh.first {
-            selected = first
+        if selected == nil {
+            // Prefer the newest ACTIVE (non-archived) file as the default
+            // landing content — an all-archived newest item is an edge
+            // case, but defaulting into archived content on first launch
+            // would read oddly; fall back to the newest file overall only
+            // if everything happens to be archived.
+            selected = fresh.first { !ArchiveStore.isArchived($0) } ?? fresh.first
         } else if let current = selected, !fresh.contains(current) {
             // The selected file vanished from disk (rare, but don't leave a
             // dangling selection pointing at nothing) — fall back to newest.
@@ -127,7 +169,26 @@ final class PresentationsModel: ObservableObject {
         recomputeUnseen()
     }
 
+    /// d300: archiving is Dan's own manual decision (see `ArchiveStore`'s
+    /// doc comment) — no automatic trigger anywhere calls this.
+    func setArchived(_ file: PresentationFile, archived: Bool) {
+        ArchiveStore.setArchived(file, archived: archived)
+        // ArchiveStore's persistence lives in UserDefaults, outside this
+        // object's own @Published storage — objectWillChange.send() is the
+        // explicit signal SwiftUI needs to re-read ArchiveStore.isArchived
+        // in the views that filter/badge on it.
+        objectWillChange.send()
+        recomputeUnseen()
+    }
+
     private func recomputeUnseen() {
-        unseenCount = files.reduce(0) { $0 + (SeenStore.isSeen($1) ? 0 : 1) }
+        // d300: an archived item no longer counts toward "needs your
+        // attention" even if it was never formally marked seen (Dan can
+        // decide something's obsolete from the title alone, without
+        // opening it) — archiving is a STRONGER signal than seen, so it
+        // subsumes it here rather than requiring both.
+        unseenCount = files.reduce(0) { count, file in
+            count + ((SeenStore.isSeen(file) || ArchiveStore.isArchived(file)) ? 0 : 1)
+        }
     }
 }

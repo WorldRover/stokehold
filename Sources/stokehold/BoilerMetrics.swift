@@ -2,11 +2,23 @@ import Darwin
 import Foundation
 
 /// A single pressure reading: machine-wide load plus the AI fleet's ("black gang") share of it.
+///
+/// d229-followup (mate9's RC): `fleetCount` deliberately does NOT live here
+/// any more. `sampleFleet()`'s machine-wide `ps` comm-match below counts ANY
+/// process named claude/codex/gemini anywhere on the machine — confirmed
+/// false-positiving on Dan's ChatGPT.app codex helper, a personal codex CLI
+/// session, and Claude Code's own daemon, none of which are fleet seats.
+/// The accurate "hands" count is `FleetSnapshot.crewCount`
+/// (`FleetConsole.swift`, console.py-derived, includes headless mates this
+/// `ps` scan can't distinguish from stray processes either way) — see
+/// `BlackGang.statusLine`'s `hands` parameter and `StokeholdApp`'s call site.
+/// `fleetCPUPercent`/`fleetRAMPercent` stay sourced from `sampleFleet()`
+/// unchanged: machine-wide process load is legitimately what those measure,
+/// this fix is scoped to the HAND COUNT only.
 struct BoilerReading {
     let cpuPercent: Double
     let ramPercent: Double
     let load1: Double
-    let fleetCount: Int
     let fleetCPUPercent: Double
     let fleetRAMPercent: Double
 }
@@ -21,7 +33,6 @@ enum BoilerMetrics {
             cpuPercent: cpu,
             ramPercent: ram,
             load1: load1,
-            fleetCount: fleet.count,
             fleetCPUPercent: fleet.cpu,
             fleetRAMPercent: fleet.ramPercent
         )

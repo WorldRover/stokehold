@@ -17,6 +17,10 @@ struct ChartRoomView: View {
             detail
         }
         .frame(minWidth: 700, minHeight: 450)
+        // Bug fix: without this, openWindow(id:) creates the window but
+        // never brings it (or the app) forward — see
+        // ChartRoomWindowActivator's own doc comment for the full story.
+        .background(ChartRoomWindowActivator())
     }
 
     private var sidebar: some View {

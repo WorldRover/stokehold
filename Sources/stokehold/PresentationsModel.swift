@@ -1,0 +1,133 @@
+import Foundation
+
+/// d253: one entry in the Chart Room feed — a file skybridge's
+/// `presentations.present_file()` copied into the shared presentations
+/// directory under a timestamp-prefixed name (`<epoch>-<original-name>`,
+/// see `presentations.py`). Read directly off disk via FileManager, no
+/// python bridge — unlike `FleetConsole`, this data IS the filesystem, not
+/// something that needs skybridge's own Python to compute.
+struct PresentationFile: Identifiable, Equatable {
+    let url: URL
+    let mtime: Date
+
+    var id: String { url.path }
+
+    /// Strips the `<epoch>-` sort prefix for display, mirroring
+    /// `chart_room.py`'s own `display_name()` exactly (same regex shape:
+    /// a leading run of digits + hyphen).
+    var displayName: String {
+        let name = url.lastPathComponent
+        guard let dashIndex = name.firstIndex(of: "-") else { return name }
+        let prefix = name[name.startIndex..<dashIndex]
+        guard !prefix.isEmpty, prefix.allSatisfy(\.isNumber) else { return name }
+        return String(name[name.index(after: dashIndex)...])
+    }
+
+    var isMarkdown: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ext == "md" || ext == "markdown"
+    }
+
+    var isHTML: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ext == "html" || ext == "htm"
+    }
+}
+
+/// d253: persists which presentations Dan has already opened, so the
+/// menubar badge can show an UNSEEN count. Keyed by path+mtime (not path
+/// alone) — `present_file`'s collision-avoidance naming means a given path
+/// is normally write-once, but keying on mtime too means a file that
+/// somehow gets replaced in place is treated as unseen again rather than
+/// silently staying marked-seen against stale content.
+enum SeenStore {
+    private static let defaultsKey = "chartRoomSeenFiles"
+
+    private static func seenKey(for file: PresentationFile) -> String {
+        "\(file.url.path)#\(file.mtime.timeIntervalSince1970)"
+    }
+
+    static func isSeen(_ file: PresentationFile) -> Bool {
+        let seen = UserDefaults.standard.stringArray(forKey: defaultsKey) ?? []
+        return seen.contains(seenKey(for: file))
+    }
+
+    static func markSeen(_ file: PresentationFile) {
+        var seen = Set(UserDefaults.standard.stringArray(forKey: defaultsKey) ?? [])
+        seen.insert(seenKey(for: file))
+        UserDefaults.standard.set(Array(seen), forKey: defaultsKey)
+    }
+}
+
+/// d253: the Chart Room's data model — lists the presentations directory
+/// on a timer poll, same idiom `BoilerModel`/`FleetConsole`'s own loops in
+/// `StokeholdApp.swift` already use (no push mechanism exists anywhere in
+/// this app; a poll interval matching `chart_room.py`'s own 2s choice is
+/// the same tradeoff already accepted once, not a new one).
+@MainActor
+final class PresentationsModel: ObservableObject {
+    @Published private(set) var files: [PresentationFile] = []
+    @Published var selected: PresentationFile?
+    @Published private(set) var unseenCount: Int = 0
+
+    // Hardcoded like `FleetConsole`'s own `skybridgeSrc`/`pmviewConfig` —
+    // this app is inherently tied to one operator's local fleet setup, not
+    // a generic install. Resolved once by hand against the live
+    // `presentations.presentations_dir(load_config(pmview.json))` value
+    // rather than re-deriving it via a python subprocess on every poll.
+    private static let directory = URL(fileURLWithPath: "/tmp/pmview/presentations")
+
+    private var pollTask: Task<Void, Never>?
+
+    init() {
+        refresh()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self?.refresh()
+            }
+        }
+    }
+
+    deinit {
+        pollTask?.cancel()
+    }
+
+    func refresh() {
+        let fm = FileManager.default
+        let entries = (try? fm.contentsOfDirectory(
+            at: Self.directory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]
+        )) ?? []
+        let fresh = entries.compactMap { url -> PresentationFile? in
+            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                  values.isRegularFile == true,
+                  let mtime = values.contentModificationDate else { return nil }
+            return PresentationFile(url: url, mtime: mtime)
+        }
+        // Sort key is the filename itself (the epoch prefix), newest-first —
+        // mirrors `list_presentations()`'s own sort exactly, no separate
+        // mtime-based ordering that could disagree with it.
+        .sorted { $0.url.lastPathComponent > $1.url.lastPathComponent }
+
+        files = fresh
+        if selected == nil, let first = fresh.first {
+            selected = first
+        } else if let current = selected, !fresh.contains(current) {
+            // The selected file vanished from disk (rare, but don't leave a
+            // dangling selection pointing at nothing) — fall back to newest.
+            selected = fresh.first
+        }
+        recomputeUnseen()
+    }
+
+    func select(_ file: PresentationFile) {
+        selected = file
+        SeenStore.markSeen(file)
+        recomputeUnseen()
+    }
+
+    private func recomputeUnseen() {
+        unseenCount = files.reduce(0) { $0 + (SeenStore.isSeen($1) ? 0 : 1) }
+    }
+}

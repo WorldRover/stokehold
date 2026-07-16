@@ -216,6 +216,11 @@ struct MarkdownBodyView: View {
                 blockView(block)
             }
         }
+        // d303: Dan needs to copy a quote, a commit SHA, a URL out of a
+        // rendered proposal. .textSelection cascades to every descendant
+        // Text view from one modifier here — verified live, not assumed
+        // (see ChartRoomTextSelectionProbe / the d303 dispatch).
+        .textSelection(.enabled)
     }
 
     @ViewBuilder

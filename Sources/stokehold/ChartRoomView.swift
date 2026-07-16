@@ -190,6 +190,9 @@ struct ChartRoomView: View {
                                 .foregroundStyle(.orange)
                                 .padding(.top, 6)
                             Text(item)
+                                // d303: docket rows carry docket ids, commit
+                                // SHAs, URLs — same copy need as the reader.
+                                .textSelection(.enabled)
                         }
                         .padding(.vertical, 2)
                     }
@@ -232,8 +235,13 @@ struct ChartRoomView: View {
         if file.isMarkdown {
             MarkdownBodyView(text: text)
         } else {
+            // d303: MarkdownBodyView owns its own .textSelection internally;
+            // this non-markdown fallback needs the same modifier directly,
+            // or a raw log/text file would be the one thing in the reader
+            // Dan couldn't copy from.
             Text(text)
                 .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
         }
     }
 }

@@ -243,7 +243,14 @@ struct ChartRoomView: View {
         .navigationTitle("Docket")
     }
 
-    private func docketRowView(_ row: DocketRow) -> some View {
+    /// Module-internal (not `private`) so `PreviewRenderer` can compose a
+    /// standalone docket-panel screenshot from the REAL row view —
+    /// `NavigationSplitView`, segmented `Picker`, and `LazyVStack` all
+    /// refuse to lay out under an offscreen `ImageRenderer`, so design
+    /// renders rebuild the panel eagerly from these rows instead. Outside
+    /// a live hierarchy the row renders in its `@State` defaults
+    /// (collapsed, unhovered).
+    func docketRowView(_ row: DocketRow) -> some View {
         // d336: a row whose text names a presentation file becomes
         // clickable — one tap from "what needs me" to "the thing to read".
         // Dumb filename-substring match (DocketFileLinking), no new schema.

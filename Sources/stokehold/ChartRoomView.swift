@@ -331,7 +331,7 @@ struct ChartRoomView: View {
     private func priorityGlyph(for pri: String) -> some View {
         let glyph = normalizedPriority(pri)
         let color: Color = {
-            switch glyph {
+            switch normalizedPriorityCode(pri) {
             case "U": return .red
             case "H": return .orange
             case "L", "P": return .secondary
@@ -342,11 +342,21 @@ struct ChartRoomView: View {
             .font(.system(.caption2, design: .monospaced))
             .fontWeight(.bold)
             .foregroundStyle(color)
-            .frame(width: 16)
+            .frame(width: 28, alignment: .leading)
             .accessibilityLabel("Priority \(glyph)")
     }
 
     private func normalizedPriority(_ pri: String) -> String {
+        switch normalizedPriorityCode(pri) {
+        case "U": return "███"
+        case "H": return "▰▰▰"
+        case "L": return "▰▱▱"
+        case "P": return "▱▱▱"
+        default: return "▰▰▱"
+        }
+    }
+
+    private func normalizedPriorityCode(_ pri: String) -> String {
         switch pri.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
         case "U", "H", "L", "P": return pri.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         default: return "M"

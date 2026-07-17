@@ -39,7 +39,10 @@ struct MenuBarGaugeLabel: View {
                 Image(systemName: "flame.fill")
                     .foregroundStyle(.red)
             }
-            Image(systemName: BlackGang.gaugeSymbolName(for: reading.cpuPercent))
+            Image(nsImage: GaugeIcon.menubarTemplateImage())
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
                 .foregroundStyle(isRedline ? .red : .primary)
                 .overlay(alignment: .topTrailing) {
                     if needsDanCount > 0 {

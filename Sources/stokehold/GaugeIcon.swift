@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 
 enum GaugeIcon {
+    private static let appIconSize = NSSize(width: 512, height: 512)
+    private static let appIconArtworkScale: CGFloat = 0.80
+    private static let appIconBadgeDiameter: CGFloat = 104
+    private static let appIconBadgeRingWidth: CGFloat = 8
+
     static func menubarTemplateImage() -> NSImage {
         let image = resourceImage(named: "menubar-gauge") ?? fallbackGaugeImage(size: NSSize(width: 18, height: 18))
         image.size = NSSize(width: 18, height: 18)
@@ -10,17 +15,26 @@ enum GaugeIcon {
     }
 
     static func appIcon(needsDan: Bool) -> NSImage {
-        let base = resourceImage(named: "appicon-gauge") ?? fallbackGaugeImage(size: NSSize(width: 512, height: 512))
-        let size = NSSize(width: 512, height: 512)
+        let base = resourceImage(named: "appicon-gauge") ?? fallbackGaugeImage(size: appIconSize)
+        let size = appIconSize
         let image = NSImage(size: size)
         image.lockFocus()
-        base.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .sourceOver, fraction: 1)
+        let inset = size.width * ((1 - appIconArtworkScale) / 2)
+        let artworkRect = NSRect(origin: NSPoint(x: inset, y: inset),
+                                 size: NSSize(width: size.width - inset * 2, height: size.height - inset * 2))
+        base.draw(in: artworkRect, from: .zero, operation: .sourceOver, fraction: 1)
         if needsDan {
+            let badgeRect = NSRect(
+                x: artworkRect.maxX - appIconBadgeDiameter / 2,
+                y: artworkRect.maxY - appIconBadgeDiameter / 2,
+                width: appIconBadgeDiameter,
+                height: appIconBadgeDiameter
+            )
             NSColor.systemOrange.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 372, y: 356, width: 92, height: 92)).fill()
+            NSBezierPath(ovalIn: badgeRect).fill()
             NSColor.white.withAlphaComponent(0.9).setStroke()
-            let ring = NSBezierPath(ovalIn: NSRect(x: 372, y: 356, width: 92, height: 92))
-            ring.lineWidth = 8
+            let ring = NSBezierPath(ovalIn: badgeRect)
+            ring.lineWidth = appIconBadgeRingWidth
             ring.stroke()
         }
         image.unlockFocus()

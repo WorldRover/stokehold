@@ -100,11 +100,11 @@ struct StokeholdApp: App {
         }
 
         Window("Chart Room", id: "chart-room") {
-            // d298: needsDanItems reuses BoilerModel's EXISTING FleetConsole
-            // poll (the same signal FleetSummaryView's dropdown row already
-            // reads) rather than a second independent subprocess-polling
-            // loop for the same data.
-            ChartRoomView(model: presentationsModel, needsDanItems: model.fleet?.needsDan ?? [])
+            // d298 rework: docketRows reuses BoilerModel's EXISTING
+            // FleetConsole poll (the same signal FleetSummaryView's
+            // dropdown row already reads) rather than a second independent
+            // subprocess-polling loop for the same data.
+            ChartRoomView(model: presentationsModel, docketRows: model.fleet?.docketRows ?? [])
         }
     }
 }

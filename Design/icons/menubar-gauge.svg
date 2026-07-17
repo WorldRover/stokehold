@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+  <!-- Menubar template glyph: pressure gauge. Alpha-only silhouette; must
+       read at 18pt. Needle high (toward redline) so it looks alive. -->
+  <circle cx="18" cy="19" r="13.5" fill="none" stroke="#000" stroke-width="3"/>
+  <!-- stub ticks at 9 / 12 / 3 o'clock, outside-in across the ring -->
+  <line x1="18" y1="3.5" x2="18" y2="8.5" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="3.5" y1="19" x2="8.5" y2="19" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="32.5" y1="19" x2="27.5" y2="19" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- needle sweeping to upper-right -->
+  <line x1="18" y1="19" x2="25.5" y2="11" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="18" cy="19" r="3.2" fill="#000"/>
+</svg>

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App icon candidate: brass five-spoke flywheel over iron plate. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#3a2d1e"/>
+      <stop offset="70%" stop-color="#1c1610"/>
+      <stop offset="100%" stop-color="#0f0c08"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eec96f"/>
+      <stop offset="45%" stop-color="#c49a42"/>
+      <stop offset="100%" stop-color="#7d5c22"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bg)"/>
+  <!-- corner rivets -->
+  <g fill="#6b5638">
+    <circle cx="76" cy="76" r="13"/><circle cx="436" cy="76" r="13"/>
+    <circle cx="76" cy="436" r="13"/><circle cx="436" cy="436" r="13"/>
+  </g>
+  <!-- rim -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#brass)" stroke-width="46"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#3a2c15" stroke-width="4" opacity="0.6"/>
+  <!-- spokes -->
+  <g stroke="url(#brass)" stroke-width="34" stroke-linecap="round">
+    <line x1="256" y1="256" x2="256" y2="98"/>
+    <line x1="256" y1="256" x2="406" y2="207"/>
+    <line x1="256" y1="256" x2="349" y2="384"/>
+    <line x1="256" y1="256" x2="163" y2="384"/>
+    <line x1="256" y1="256" x2="106" y2="207"/>
+  </g>
+  <!-- hub -->
+  <circle cx="256" cy="256" r="58" fill="url(#brass)"/>
+  <circle cx="256" cy="256" r="24" fill="#241a0f"/>
+</svg>

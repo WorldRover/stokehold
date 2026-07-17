@@ -2,7 +2,8 @@ import Foundation
 
 /// The fleet's Captain's-console view: crew activity (including
 /// headless mates BoilerMetrics' process scan can miss), pending Dispatches,
-/// items needing Dan, and the review shelf. Read-only reuse of
+/// and the live docket (whose rows carry the dan-owned/needs-Dan tag every
+/// needs-Dan surface in the app derives from). Read-only reuse of
 /// `src/skybridge/console.py`'s existing pure functions via a `python3`
 /// subprocess — no skybridge source is modified to get this data.
 /// d298 rework: one live docket row, shaped for the Chart Room's Docket
@@ -30,15 +31,11 @@ struct DocketRow: Decodable, Identifiable {
 }
 
 struct FleetSnapshot: Decodable {
-    let needsDan: [String]
-    let reviewShelf: [String]
     let fleetCapacity: [String: [String]]
     let dispatchCount: Int
     let docketRows: [DocketRow]
 
     enum CodingKeys: String, CodingKey {
-        case needsDan = "needs_dan"
-        case reviewShelf = "review_shelf"
         case fleetCapacity = "fleet_capacity"
         case dispatchCount = "dispatch_count"
         case docketRows = "docket_rows"
@@ -51,12 +48,32 @@ struct FleetSnapshot: Decodable {
         fleetCapacity.values.reduce(0) { $0 + $1.count }
     }
 
+    var workingCount: Int {
+        fleetCapacity["working"]?.count ?? 0
+    }
+
     var headlessStandbyCount: Int {
         fleetCapacity["standby_headless"]?.count ?? 0
     }
 
     var blockedCount: Int {
         fleetCapacity["blocked"]?.count ?? 0
+    }
+
+    /// OPEN dan-owned docket items (d382): counted off `docketRows`' own
+    /// `needsDan` tag — the bosun `dan_owned_open_items` classification
+    /// computed server-side in the python bridge below — so the dropdown's
+    /// hero row, the Chart Room's Docket panel, and the menubar dot all read
+    /// ONE derivation of "needs Dan" and can never silently disagree.
+    /// Clears only when the items actually close (docketRows is already
+    /// filtered to non-resolved), unlike the d253 unseen-presentations
+    /// badge, which clears on view.
+    var needsDanOpenCount: Int {
+        docketRows.filter(\.needsDan).count
+    }
+
+    var openDocketCount: Int {
+        docketRows.count
     }
 }
 
@@ -95,8 +112,6 @@ enum FleetConsole {
             for item in sorted(live_items, key=item_sort_key)
         ]
         print(json.dumps({
-            "needs_dan": data["needs_dan"],
-            "review_shelf": data["review_shelf"],
             "fleet_capacity": data["fleet_capacity"],
             "dispatch_count": len(dispatch_lines(config)),
             "docket_rows": docket_rows,

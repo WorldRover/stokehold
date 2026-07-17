@@ -1,31 +1,30 @@
 import SwiftUI
 
-/// The dropdown's fleet section — ALL crew activity (including headless
-/// mates, which the CPU/RAM gauges' process scan can miss), pending
-/// Dispatches, items needing Dan, and the review shelf. Renders from a
-/// `FleetSnapshot` (see `FleetConsole.swift`); shows nothing while the first
-/// sample is still in flight rather than a misleading zeroed-out section.
+/// The dropdown's fleet section — COUNTS-ONLY (d382, Dan's ruling): the
+/// dropdown is a GLANCE surface, not a reading surface. Quick-access counts,
+/// no item lists, no item text at all — the Chart Room is where detail
+/// lives, so every row doubles as a click-through into it.
 ///
-/// Rows are built into a plain array and rendered via `ForEach` rather than a
-/// stack of `if count > 0 { ... }` siblings — an empty conditional branch can
-/// still reserve a VStack spacing slot, which is exactly the dead vertical
-/// gap Dan flagged (d184). Hidden (zero-count) sections are dropped from the
-/// array entirely, so nothing but real content ever takes up space.
+/// Needs-Dan is the hero row: it's the one count that means "Dan has to act,"
+/// so it renders bigger and hotter than everything else. Its count is
+/// `FleetSnapshot.needsDanOpenCount` — the SAME docket-derived
+/// dan-owned-open-items signal the Chart Room's Docket panel and the menubar
+/// dot read (one derivation, three surfaces, never disagreeing), NOT a
+/// second independently-derived "needs Dan" list.
+///
+/// Zero-count rows drop entirely (d184 zero-drops convention — same rule the
+/// menubar dot follows): nothing but real signal ever takes up space. The
+/// crew line always shows; "who's below" is state, not a to-do count.
 struct FleetSummaryView: View {
     let fleet: FleetSnapshot?
     let stale: Bool
-
-    private struct Row: Identifiable {
-        let id: String
-        let count: Int
-        let label: String
-        let items: [String]
-        let highlight: Bool
-    }
+    /// Injected by the App scene (`openWindow` lives there); defaults to a
+    /// no-op so the view stays constructible in previews/renders.
+    var openChartRoom: () -> Void = {}
 
     var body: some View {
         if let fleet {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 4) {
                     Text("Fleet")
                         .font(.caption)
@@ -40,10 +39,21 @@ struct FleetSummaryView: View {
                     }
                 }
 
+                if fleet.needsDanOpenCount > 0 {
+                    needsDanRow(count: fleet.needsDanOpenCount)
+                }
+
                 crewLine(for: fleet)
 
-                ForEach(rows(for: fleet)) { row in
-                    rowView(row)
+                if fleet.dispatchCount > 0 {
+                    countRow(count: fleet.dispatchCount,
+                             label: "pending dispatch\(fleet.dispatchCount == 1 ? "" : "es")",
+                             help: "Open the Chart Room")
+                }
+                if fleet.openDocketCount > 0 {
+                    countRow(count: fleet.openDocketCount,
+                             label: "open docket item\(fleet.openDocketCount == 1 ? "" : "s")",
+                             help: "Open the Chart Room docket panel")
                 }
             }
         } else {
@@ -53,42 +63,63 @@ struct FleetSummaryView: View {
         }
     }
 
-    private func rows(for fleet: FleetSnapshot) -> [Row] {
-        [
-            Row(id: "dispatch", count: fleet.dispatchCount, label: "pending dispatch", items: [], highlight: false),
-            Row(id: "needsDan", count: fleet.needsDan.count, label: "item needs Dan", items: fleet.needsDan, highlight: true),
-            Row(id: "review", count: fleet.reviewShelf.count, label: "on the review shelf", items: fleet.reviewShelf, highlight: false),
-        ].filter { $0.count > 0 }
-    }
-
-    private func crewLine(for fleet: FleetSnapshot) -> some View {
-        let working = fleet.fleetCapacity["working"]?.count ?? 0
-        let blocked = fleet.blockedCount
-        let headless = fleet.headlessStandbyCount
-        return Text("\(fleet.crewCount) crew — \(working) working · \(blocked) blocked · \(headless) headless standby")
-            .font(.caption2)
-            .foregroundStyle(blocked > 0 ? .red : .secondary)
-    }
-
-    /// A count line, with up to 2 preview items underneath when present —
-    /// bounded so the dropdown can't grow into a full console dump.
-    private func rowView(_ row: Row) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("\(row.count) \(row.label)\(row.count == 1 ? "" : "s")")
-                .font(.caption2)
-                .foregroundStyle(row.highlight ? .orange : .primary)
-            ForEach(row.items.prefix(2), id: \.self) { item in
-                Text("· \(item)")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+    /// The hero: the only row whose count means "Dan has to act." Bigger,
+    /// bolder, hotter than the secondary counts; click lands in the Chart
+    /// Room, whose Docket panel already defaults to the Dan-only filter.
+    private func needsDanRow(count: Int) -> some View {
+        Button(action: openChartRoom) {
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("\(count) need\(count == 1 ? "s" : "") Dan")
+                    .font(.callout)
+                    .fontWeight(.bold)
+                    .monospacedDigit()
+                Spacer(minLength: 0)
             }
-            if row.items.count > 2 {
-                Text("+ \(row.items.count - 2) more")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-            }
+            .foregroundStyle(.orange)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help("Open the Chart Room docket panel")
+    }
+
+    /// One line, always visible — "who's below" is state, not a to-do
+    /// count. Only the blocked segment turns red (and drops at 0, d184),
+    /// so a single blocked mate doesn't paint the whole line as an alarm.
+    private func crewLine(for fleet: FleetSnapshot) -> some View {
+        var line = Text("\(fleet.crewCount) crew · \(fleet.workingCount) working")
+        if fleet.blockedCount > 0 {
+            // `foregroundColor` (not `foregroundStyle`): the Text-returning
+            // overload needed for concatenation exists back to our macOS 13
+            // deployment target; the style variant is 14.0+.
+            line = line + Text(" · \(fleet.blockedCount) blocked").foregroundColor(.red)
+        }
+        if fleet.headlessStandbyCount > 0 {
+            line = line + Text(" · \(fleet.headlessStandbyCount) standby")
+        }
+        return line
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
+    /// A secondary count row: quick-access click-through, no item text ever.
+    private func countRow(count: Int, label: String, help: String) -> some View {
+        Button(action: openChartRoom) {
+            HStack(spacing: 0) {
+                Text("\(count) ")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }

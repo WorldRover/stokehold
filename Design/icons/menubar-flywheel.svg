@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+  <!-- Menubar template glyph: five-spoke flywheel. -->
+  <circle cx="18" cy="18" r="13.5" fill="none" stroke="#000" stroke-width="3.5"/>
+  <g stroke="#000" stroke-width="2.6" stroke-linecap="round">
+    <line x1="18" y1="18" x2="18" y2="6.5"/>
+    <line x1="18" y1="18" x2="28.9" y2="14.4"/>
+    <line x1="18" y1="18" x2="24.8" y2="27.3"/>
+    <line x1="18" y1="18" x2="11.2" y2="27.3"/>
+    <line x1="18" y1="18" x2="7.1" y2="14.4"/>
+  </g>
+  <circle cx="18" cy="18" r="4" fill="#000"/>
+</svg>

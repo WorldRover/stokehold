@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App icon candidate: stoker's shovel with embers. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#3a2d1e"/>
+      <stop offset="70%" stop-color="#1c1610"/>
+      <stop offset="100%" stop-color="#0f0c08"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eec96f"/>
+      <stop offset="45%" stop-color="#c49a42"/>
+      <stop offset="100%" stop-color="#7d5c22"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9aa0a8"/>
+      <stop offset="100%" stop-color="#4c5259"/>
+    </linearGradient>
+    <radialGradient id="ember" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="60%" stop-color="#e2571b"/>
+      <stop offset="100%" stop-color="#7a1d08"/>
+    </radialGradient>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bg)"/>
+  <g transform="rotate(45 256 256)">
+    <!-- D-grip -->
+    <path d="M256 44 a60 60 0 0 1 60 60 v24 h-120 v-24 a60 60 0 0 1 60 -60 Z
+             M256 82 a26 26 0 0 0 -26 26 v10 h52 v-10 a26 26 0 0 0 -26 -26 Z"
+          fill="url(#brass)" fill-rule="evenodd"/>
+    <!-- shaft -->
+    <rect x="238" y="128" width="36" height="150" rx="8" fill="url(#brass)"/>
+    <!-- scoop -->
+    <path fill="url(#steel)" d="M166 272 h180 v88 a90 76 0 0 1 -90 76 a90 76 0 0 1 -90 -76 Z"/>
+    <path fill="#2c3036" d="M166 272 h180 v18 h-180 Z" opacity="0.55"/>
+    <!-- embers heaped on the scoop -->
+    <circle cx="216" cy="300" r="22" fill="url(#ember)"/>
+    <circle cx="262" cy="288" r="26" fill="url(#ember)"/>
+    <circle cx="304" cy="304" r="20" fill="url(#ember)"/>
+    <circle cx="240" cy="322" r="18" fill="url(#ember)"/>
+    <circle cx="284" cy="330" r="16" fill="url(#ember)"/>
+  </g>
+</svg>

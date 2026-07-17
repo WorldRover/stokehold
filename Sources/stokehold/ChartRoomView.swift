@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// d253: the Chart Room reading window — a `NavigationSplitView` gives
@@ -52,6 +53,8 @@ struct ChartRoomView: View {
     /// tap target (the icon), so expanding and opening-a-file never fight
     /// on the same gesture.
     @State private var expandedDocketRowIDs: Set<String> = []
+    @State private var hoveredFileTagRowID: String?
+    @State private var hoveredLinearID: String?
 
     private var visibleDocketRows: [DocketRow] {
         showAllDocket ? docketRows : docketRows.filter(\.needsDan)
@@ -252,41 +255,31 @@ struct ChartRoomView: View {
         // it keeps its own tap target instead of fighting the row's.
         let isExpanded = expandedDocketRowIDs.contains(row.id)
         return HStack(alignment: .top, spacing: 8) {
-            priorityIcon(for: row.pri)
+            Button {
+                toggleDocketRow(row.id)
+            } label: {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse" : "Expand")
+            priorityGlyph(for: row.pri)
             Text(row.id)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34, alignment: .leading)
-            Text(row.text)
-                .lineLimit(isExpanded ? nil : 1)
-                .truncationMode(.tail)
-                .fixedSize(horizontal: false, vertical: isExpanded)
-                // d303: docket rows carry docket ids, commit SHAs, URLs —
-                // same copy need as the reader itself. Stays selectable
-                // expanded or collapsed.
-                .textSelection(.enabled)
+            docketText(row.text, isExpanded: isExpanded)
             Spacer(minLength: 8)
             if let linkedFile {
-                Button {
-                    selectedTag = linkedFile.id
-                } label: {
-                    Image(systemName: "arrow.up.forward.square")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+                fileTag(for: linkedFile, rowID: row.id)
             }
             if !row.linearId.isEmpty {
-                Text(row.linearId)
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.blue.opacity(0.12)))
+                linearTag(row.linearId)
             }
             if !row.owner.isEmpty {
-                Text(row.owner)
+                Text(displayOwner(row.owner))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -297,15 +290,125 @@ struct ChartRoomView: View {
         .padding(.vertical, 5)
         .contentShape(Rectangle())
         .onTapGesture {
-            if isExpanded {
-                expandedDocketRowIDs.remove(row.id)
-            } else {
-                expandedDocketRowIDs.insert(row.id)
-            }
+            toggleDocketRow(row.id)
         }
     }
 
-    private func priorityIcon(for pri: String) -> some View {
+    @ViewBuilder
+    private func docketText(_ text: String, isExpanded: Bool) -> some View {
+        // d303 + d355: collapsed text must still expand when clicked; enabled
+        // selection wins the click on macOS, so copy/selection lives in the
+        // expanded reading state.
+        if isExpanded {
+            Text(text)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        } else {
+            Text(text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: false)
+                .textSelection(.disabled)
+        }
+    }
+
+    private func toggleDocketRow(_ rowID: String) {
+        if expandedDocketRowIDs.contains(rowID) {
+            expandedDocketRowIDs.remove(rowID)
+        } else {
+            expandedDocketRowIDs.insert(rowID)
+        }
+    }
+
+    private func priorityGlyph(for pri: String) -> some View {
+        let glyph = normalizedPriority(pri)
+        let color: Color = {
+            switch glyph {
+            case "U": return .red
+            case "H": return .orange
+            case "L", "P": return .secondary
+            default: return .yellow
+            }
+        }()
+        return Text(glyph)
+            .font(.system(.caption2, design: .monospaced))
+            .fontWeight(.bold)
+            .foregroundStyle(color)
+            .frame(width: 16)
+            .accessibilityLabel("Priority \(glyph)")
+    }
+
+    private func normalizedPriority(_ pri: String) -> String {
+        switch pri.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "U", "H", "L", "P": return pri.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        default: return "M"
+        }
+    }
+
+    private func fileTag(for file: PresentationFile, rowID: String) -> some View {
+        let isHovered = hoveredFileTagRowID == rowID
+        return Button {
+            selectedTag = file.id
+        } label: {
+            Text(file.url.lastPathComponent)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(.teal)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.teal.opacity(isHovered ? 0.22 : 0.12)))
+                .overlay(Capsule().stroke(Color.teal.opacity(isHovered ? 0.65 : 0.25)))
+        }
+        .buttonStyle(.plain)
+        .help("Open \(file.url.lastPathComponent)")
+        .onHover { hovering in
+            hoveredFileTagRowID = hovering ? rowID : nil
+        }
+    }
+
+    private func linearTag(_ linearID: String) -> some View {
+        let isHovered = hoveredLinearID == linearID
+        return Button {
+            openLinearIssue(linearID)
+        } label: {
+            Text(linearID)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.blue.opacity(isHovered ? 0.22 : 0.12)))
+                .overlay(Capsule().stroke(Color.blue.opacity(isHovered ? 0.65 : 0.25)))
+        }
+        .buttonStyle(.plain)
+        .help("Open \(linearID) in Linear")
+        .onHover { hovering in
+            hoveredLinearID = hovering ? linearID : nil
+        }
+    }
+
+    private func openLinearIssue(_ linearID: String) {
+        if let appURL = URL(string: "linear://issue/\(linearID)"),
+           NSWorkspace.shared.open(appURL) {
+            return
+        }
+        if let webURL = URL(string: "https://linear.app/deepwell-it/issue/\(linearID)") {
+            NSWorkspace.shared.open(webURL)
+        }
+    }
+
+    private func displayOwner(_ owner: String) -> String {
+        let trimmed = owner.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch trimmed.lowercased() {
+        case "dan": return "Dan"
+        default: return trimmed
+        }
+    }
+
+    private func legacyPriorityIcon(for pri: String) -> some View {
         let spec: (symbol: String, color: Color) = {
             switch pri {
             case "U": return ("exclamationmark.3", .red)
@@ -357,30 +460,57 @@ struct ChartRoomView: View {
     }
 
     private func backlinkHeader(_ rows: [DocketRow]) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "link")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text("Referenced by:")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ForEach(rows) { row in
-                Button(row.id) {
-                    // d337: "each id tappable to its docket detail" — jumps
-                    // to the pinned Docket panel in All mode so the
-                    // referenced row is guaranteed visible even if it's not
-                    // owner=dan (no scroll-to-item, kept dumb per spec).
-                    showAllDocket = true
-                    selectedTag = Self.docketTag
-                }
-                .buttonStyle(.plain)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.blue)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("Referenced by:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
             }
-            Spacer()
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+            ForEach(rows) { row in
+                docketBacklinkRow(row)
+                Divider()
+            }
+        }
+    }
+
+    private func docketBacklinkRow(_ row: DocketRow) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            priorityGlyph(for: row.pri)
+            Button(row.id) {
+                // d337: "each id tappable to its docket detail" — jumps
+                // to the pinned Docket panel in All mode so the referenced
+                // row is guaranteed visible even if it's not owner=dan.
+                showAllDocket = true
+                selectedTag = Self.docketTag
+            }
+            .buttonStyle(.plain)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.blue)
+            .frame(width: 34, alignment: .leading)
+            Text(row.text)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 8)
+            if !row.linearId.isEmpty {
+                linearTag(row.linearId)
+            }
+            if !row.owner.isEmpty {
+                Text(displayOwner(row.owner))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 64, alignment: .trailing)
+            }
         }
         .padding(.horizontal)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder

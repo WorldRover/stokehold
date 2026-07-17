@@ -51,6 +51,7 @@ struct StokeholdApp: App {
         // d382 dev utility: `stokehold render-previews [outdir]` renders the
         // dropdown/label views to PNGs and exits before any scene starts.
         PreviewRenderer.runIfRequested()
+        GaugeIcon.installAppIcon(needsDan: false)
     }
 
     @StateObject private var model = BoilerModel()
@@ -77,6 +78,12 @@ struct StokeholdApp: App {
                 chartRoomUnseenCount: presentationsModel.unseenCount,
                 needsDanCount: model.fleet?.needsDanOpenCount ?? 0
             )
+            .onAppear {
+                GaugeIcon.installAppIcon(needsDan: (model.fleet?.needsDanOpenCount ?? 0) > 0)
+            }
+            .onChange(of: model.fleet?.needsDanOpenCount ?? 0) { count in
+                GaugeIcon.installAppIcon(needsDan: count > 0)
+            }
         }
 
         Window("Chart Room", id: "chart-room") {

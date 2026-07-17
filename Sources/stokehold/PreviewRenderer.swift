@@ -108,6 +108,8 @@ enum PreviewRenderer {
                 name, to: dir, scale: 4
             )
         }
+        save(GaugeIcon.appIcon(needsDan: false), "app-icon-dan-0", to: dir)
+        save(GaugeIcon.appIcon(needsDan: true), "app-icon-dan-3", to: dir)
     }
 
     private static func sampleRows(needsDan: Int, others: Int) -> [DocketRow] {
@@ -133,6 +135,22 @@ enum PreviewRenderer {
         }
         let rep = NSBitmapImageRep(cgImage: cgImage)
         guard let data = rep.representation(using: .png, properties: [:]) else {
+            print("png encode FAILED: \(name)")
+            return
+        }
+        let url = dir.appendingPathComponent("\(name).png")
+        do {
+            try data.write(to: url)
+            print("wrote \(url.path)")
+        } catch {
+            print("write FAILED: \(url.path) — \(error)")
+        }
+    }
+
+    private static func save(_ image: NSImage, _ name: String, to dir: URL) {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else {
             print("png encode FAILED: \(name)")
             return
         }

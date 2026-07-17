@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// A brass steam-pressure gauge: a 270° arc face with tick marks and a needle.
@@ -61,6 +62,14 @@ struct PressureGauge: View {
     }
 
     private func pointOn(center: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
-        CGPoint(x: center.x + radius * cos(angle.radians), y: center.y + radius * sin(angle.radians))
+        // d342: `cos`/`sin` are ambiguous here on the CI runner's toolchain
+        // between Darwin's Double overload and CoreGraphics' CGFloat one —
+        // didn't reproduce locally, but a module-qualified call to the
+        // Double overload plus an explicit CGFloat conversion removes the
+        // ambiguity by construction rather than depending on whichever
+        // overload a given SDK/toolchain version happens to prefer.
+        let x = center.x + radius * CGFloat(Foundation.cos(angle.radians))
+        let y = center.y + radius * CGFloat(Foundation.sin(angle.radians))
+        return CGPoint(x: x, y: y)
     }
 }

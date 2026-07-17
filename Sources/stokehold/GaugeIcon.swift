@@ -3,7 +3,8 @@ import SwiftUI
 
 enum GaugeIcon {
     static func menubarTemplateImage() -> NSImage {
-        let image = resourceImage(named: "menubar-gauge") ?? fallbackGaugeImage(size: NSSize(width: 36, height: 36))
+        let image = resourceImage(named: "menubar-gauge") ?? fallbackGaugeImage(size: NSSize(width: 18, height: 18))
+        image.size = NSSize(width: 18, height: 18)
         image.isTemplate = true
         return image
     }

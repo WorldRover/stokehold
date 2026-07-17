@@ -14,6 +14,16 @@ struct MenuBarGaugeLabel: View {
     // zero-count-drops-entirely convention (d184) rather than a
     // permanently-visible "0".
     var chartRoomUnseenCount: Int = 0
+    // d382: OPEN dan-owned docket items (`FleetSnapshot.needsDanOpenCount`
+    // — the same single derivation the dropdown's hero row reads). Distinct
+    // from the d253 badge above in both meaning and lifecycle: that one
+    // counts unseen Chart Room arrivals and clears on view; this one
+    // reflects open docket items owned by Dan and clears only when they
+    // close. Rendered as a DOT on the gauge glyph, not a second number —
+    // menubar template rendering is monochrome, so the SHAPE (dot present
+    // vs absent) is what carries the signal, not its color. 0 renders
+    // nothing (d184 zero-drops).
+    var needsDanCount: Int = 0
 
     private static let dangerThreshold: Double = 80
 
@@ -31,6 +41,14 @@ struct MenuBarGaugeLabel: View {
             }
             Image(systemName: BlackGang.gaugeSymbolName(for: reading.cpuPercent))
                 .foregroundStyle(isRedline ? .red : .primary)
+                .overlay(alignment: .topTrailing) {
+                    if needsDanCount > 0 {
+                        Circle()
+                            .fill(.orange)
+                            .frame(width: 5, height: 5)
+                            .offset(x: 3, y: -2)
+                    }
+                }
             Text(BlackGang.glanceLabel(for: reading))
                 .monospacedDigit()
                 .fontWeight(isRedline ? .bold : .regular)

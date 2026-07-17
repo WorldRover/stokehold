@@ -47,6 +47,12 @@ final class BoilerModel: ObservableObject {
 
 @main
 struct StokeholdApp: App {
+    init() {
+        // d382 dev utility: `stokehold render-previews [outdir]` renders the
+        // dropdown/label views to PNGs and exits before any scene starts.
+        PreviewRenderer.runIfRequested()
+    }
+
     @StateObject private var model = BoilerModel()
     // d253: owned at the App level (not inside ChartRoomView) so the
     // unseen-count BADGE on the menubar icon stays live even while the
@@ -57,46 +63,20 @@ struct StokeholdApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("stokehold")
-                    .font(.headline)
-
-                HStack(spacing: 12) {
-                    PressureGauge(label: "CPU", value: model.reading.cpuPercent, dangerThreshold: 80)
-                    PressureGauge(label: "RAM", value: model.reading.ramPercent, dangerThreshold: 85)
-                    PressureGauge(label: "LOAD", value: min(model.reading.load1 * 25, 100), dangerThreshold: 80)
-                }
-
-                Divider()
-
-                Text(BlackGang.statusLine(for: model.reading, hands: model.fleet?.crewCount))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Divider()
-
-                FleetSummaryView(fleet: model.fleet, stale: model.fleetStale)
-
-                Divider()
-
-                Button {
-                    openWindow(id: "chart-room")
-                } label: {
-                    HStack {
-                        Text("Chart Room")
-                        Spacer()
-                        if presentationsModel.unseenCount > 0 {
-                            Text("\(presentationsModel.unseenCount)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+            DropdownView(
+                reading: model.reading,
+                fleet: model.fleet,
+                fleetStale: model.fleetStale,
+                chartRoomUnseenCount: presentationsModel.unseenCount
+            ) {
+                openWindow(id: "chart-room")
             }
-            .padding(10)
-            .frame(width: 250)
         } label: {
-            MenuBarGaugeLabel(reading: model.reading, chartRoomUnseenCount: presentationsModel.unseenCount)
+            MenuBarGaugeLabel(
+                reading: model.reading,
+                chartRoomUnseenCount: presentationsModel.unseenCount,
+                needsDanCount: model.fleet?.needsDanOpenCount ?? 0
+            )
         }
 
         Window("Chart Room", id: "chart-room") {

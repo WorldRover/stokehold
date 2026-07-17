@@ -61,6 +61,41 @@ enum PreviewRenderer {
             )
         }
 
+        // The dropdown against the LIVE fleet (real console poll), plus the
+        // Chart Room window with the live docket — so proposals can show
+        // today's actual state, not only synthetic sample data. Skipped
+        // silently if the console subprocess fails (e.g. no fleet running).
+        if let live = FleetConsole.sample() {
+            save(
+                DropdownView(reading: reading, fleet: live, fleetStale: false, chartRoomUnseenCount: 0)
+                    .background(Color(white: 0.13))
+                    .environment(\.colorScheme, .dark),
+                "dropdown-live-dark", to: dir
+            )
+            // The docket panel rebuilt eagerly from the REAL row view —
+            // NavigationSplitView, segmented Picker, and LazyVStack all
+            // render placeholders under an offscreen ImageRenderer, so the
+            // panel chrome is approximated; the rows are the shipping code.
+            let chartRoom = ChartRoomView(model: PresentationsModel(), docketRows: live.docketRows)
+            let danRows = live.docketRows.filter(\.needsDan)
+            save(
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Docket — Dan")
+                        .font(.headline)
+                        .padding([.horizontal, .top])
+                        .padding(.bottom, 8)
+                    ForEach(danRows) { row in
+                        chartRoom.docketRowView(row)
+                        Divider()
+                    }
+                }
+                .frame(width: 760)
+                .background(Color(white: 0.13))
+                .environment(\.colorScheme, .dark),
+                "docket-panel-live-dark", to: dir
+            )
+        }
+
         // Menubar label states, rendered on a dark strip approximating the
         // menubar; scale 4 so the ~18pt label is legible in a proposal doc.
         for (count, name) in [(0, "menubar-label-dan-0"), (3, "menubar-label-dan-3")] {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The fleet's Captain's-console view: missions, crew activity (including
+/// The fleet's Captain's-console view: crew activity (including
 /// headless mates BoilerMetrics' process scan can miss), pending Dispatches,
 /// items needing Dan, and the review shelf. Read-only reuse of
 /// `src/skybridge/console.py`'s existing pure functions via a `python3`
@@ -30,7 +30,6 @@ struct DocketRow: Decodable, Identifiable {
 }
 
 struct FleetSnapshot: Decodable {
-    let missions: [String]
     let needsDan: [String]
     let reviewShelf: [String]
     let fleetCapacity: [String: [String]]
@@ -38,7 +37,6 @@ struct FleetSnapshot: Decodable {
     let docketRows: [DocketRow]
 
     enum CodingKeys: String, CodingKey {
-        case missions
         case needsDan = "needs_dan"
         case reviewShelf = "review_shelf"
         case fleetCapacity = "fleet_capacity"
@@ -97,7 +95,6 @@ enum FleetConsole {
             for item in sorted(live_items, key=item_sort_key)
         ]
         print(json.dumps({
-            "missions": data["missions"],
             "needs_dan": data["needs_dan"],
             "review_shelf": data["review_shelf"],
             "fleet_capacity": data["fleet_capacity"],

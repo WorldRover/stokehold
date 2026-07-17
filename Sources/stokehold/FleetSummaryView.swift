@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The dropdown's fleet section — missions, ALL crew activity (including
-/// headless mates, which the CPU/RAM gauges' process scan can miss), pending
+/// The dropdown's fleet section — ALL crew activity (including headless
+/// mates, which the CPU/RAM gauges' process scan can miss), pending
 /// Dispatches, items needing Dan, and the review shelf. Renders from a
 /// `FleetSnapshot` (see `FleetConsole.swift`); shows nothing while the first
 /// sample is still in flight rather than a misleading zeroed-out section.
@@ -55,7 +55,6 @@ struct FleetSummaryView: View {
 
     private func rows(for fleet: FleetSnapshot) -> [Row] {
         [
-            Row(id: "missions", count: fleet.missions.count, label: "active mission", items: fleet.missions, highlight: false),
             Row(id: "dispatch", count: fleet.dispatchCount, label: "pending dispatch", items: [], highlight: false),
             Row(id: "needsDan", count: fleet.needsDan.count, label: "item needs Dan", items: fleet.needsDan, highlight: true),
             Row(id: "review", count: fleet.reviewShelf.count, label: "on the review shelf", items: fleet.reviewShelf, highlight: false),

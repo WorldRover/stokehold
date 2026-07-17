@@ -408,22 +408,6 @@ struct ChartRoomView: View {
         }
     }
 
-    private func legacyPriorityIcon(for pri: String) -> some View {
-        let spec: (symbol: String, color: Color) = {
-            switch pri {
-            case "U": return ("exclamationmark.3", .red)
-            case "H": return ("arrow.up.circle.fill", .orange)
-            case "L": return ("circle", .secondary)
-            case "P": return ("moon.zzz.fill", .secondary)
-            default: return ("circle.fill", .yellow) // "M" and any unrecognized code
-            }
-        }()
-        return Image(systemName: spec.symbol)
-            .font(.caption)
-            .foregroundStyle(spec.color)
-            .frame(width: 16)
-    }
-
     private func fileDetail(_ file: PresentationFile) -> some View {
         let isArchived = ArchiveStore.isArchived(file)
         // d337: reverse of d336 — which docket rows' text names THIS file.

@@ -128,7 +128,7 @@ struct ChartRoomView: View {
 
     private func fileRow(_ file: PresentationFile, archived: Bool) -> some View {
         HStack {
-            Text(file.displayName)
+            Text(sidebarLabel(for: file))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(archived ? .secondary : .primary)
@@ -145,6 +145,26 @@ struct ChartRoomView: View {
                 model.setArchived(file, archived: !archived)
             }
         }
+    }
+
+    // d346: Dan hit two generations of one doc rendering as the IDENTICAL
+    // sidebar label (the epoch-prefix strip collapses "1784224462-d294-..."
+    // and a later "d294-..." to the same displayName) — read the stale one
+    // twice, unable to tell them apart. Defense-in-depth alongside the
+    // write-side warn in `skybridge present` (skybridge/presentations.py):
+    // this catches a collision regardless of how it got on disk. Checked
+    // against the FULL file list (not just the active or archived subset),
+    // since a collision between one of each is exactly as confusing.
+    private static let sidebarLabelDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd HH:mm"
+        return formatter
+    }()
+
+    private func sidebarLabel(for file: PresentationFile) -> String {
+        let collides = model.files.contains { $0.id != file.id && $0.displayName == file.displayName }
+        guard collides else { return file.displayName }
+        return "\(file.displayName) · \(Self.sidebarLabelDateFormatter.string(from: file.mtime))"
     }
 
     private var emptyState: some View {

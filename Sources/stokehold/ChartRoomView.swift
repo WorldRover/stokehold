@@ -215,7 +215,11 @@ struct ChartRoomView: View {
     }
 
     private func docketRowView(_ row: DocketRow) -> some View {
-        HStack(spacing: 8) {
+        // d336: a row whose text names a presentation file becomes
+        // clickable — one tap from "what needs me" to "the thing to read".
+        // Dumb filename-substring match (DocketFileLinking), no new schema.
+        let linkedFile = DocketFileLinking.referencedFile(in: row.text, files: model.files)
+        return HStack(spacing: 8) {
             priorityIcon(for: row.pri)
             Text(row.id)
                 .font(.system(.caption, design: .monospaced))
@@ -228,6 +232,11 @@ struct ChartRoomView: View {
                 // same copy need as the reader itself.
                 .textSelection(.enabled)
             Spacer(minLength: 8)
+            if linkedFile != nil {
+                Image(systemName: "arrow.up.forward.square")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
             if !row.linearId.isEmpty {
                 Text(row.linearId)
                     .font(.caption2)
@@ -247,6 +256,12 @@ struct ChartRoomView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let linkedFile {
+                selectedTag = linkedFile.id
+            }
+        }
     }
 
     private func priorityIcon(for pri: String) -> some View {
@@ -267,14 +282,24 @@ struct ChartRoomView: View {
 
     private func fileDetail(_ file: PresentationFile) -> some View {
         let isArchived = ArchiveStore.isArchived(file)
-        return Group {
-            if file.isHTML {
-                HTMLPreviewView(url: file.url)
-            } else {
-                ScrollView {
-                    contentBody(for: file)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        // d337: reverse of d336 — which docket rows' text names THIS file.
+        // Render-time only, never written into the .md (files stay clean,
+        // backlinks never go stale, the [AI-assisted] trailer stays last).
+        let referencingRows = DocketFileLinking.docketRows(referencing: file, in: docketRows)
+        return VStack(alignment: .leading, spacing: 0) {
+            if !referencingRows.isEmpty {
+                backlinkHeader(referencingRows)
+                Divider()
+            }
+            Group {
+                if file.isHTML {
+                    HTMLPreviewView(url: file.url)
+                } else {
+                    ScrollView {
+                        contentBody(for: file)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         }
@@ -288,6 +313,33 @@ struct ChartRoomView: View {
                 }
             }
         }
+    }
+
+    private func backlinkHeader(_ rows: [DocketRow]) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "link")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("Referenced by:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(rows) { row in
+                Button(row.id) {
+                    // d337: "each id tappable to its docket detail" — jumps
+                    // to the pinned Docket panel in All mode so the
+                    // referenced row is guaranteed visible even if it's not
+                    // owner=dan (no scroll-to-item, kept dumb per spec).
+                    showAllDocket = true
+                    selectedTag = Self.docketTag
+                }
+                .buttonStyle(.plain)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.blue)
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder

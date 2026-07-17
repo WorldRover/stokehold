@@ -26,35 +26,43 @@ struct MenuBarGaugeLabel: View {
     var needsDanCount: Int = 0
 
     private static let dangerThreshold: Double = 80
+    private static let glyphFrame: CGFloat = 18
+    private static let glyphDrawSize: CGFloat = 16
+    private static let needsDanDotSize: CGFloat = 3.75
+    private static let readoutWidth: CGFloat = 60
+    private static let redlineSlotWidth: CGFloat = 10
 
     private var isRedline: Bool { reading.cpuPercent >= Self.dangerThreshold }
 
     var body: some View {
         HStack(spacing: 3) {
-            if isRedline {
-                // Redline accent: a small flame alongside the gauge — menubar
-                // items are historically forced to TEMPLATE (monochrome)
-                // rendering, so the shape/glyph itself is what has to carry
-                // "hot," not just color; the bold number below carries it too.
-                Image(systemName: "flame.fill")
-                    .foregroundStyle(.red)
-            }
-            Image(nsImage: GaugeIcon.menubarTemplateImage())
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .foregroundStyle(isRedline ? .red : .primary)
-                .overlay(alignment: .topTrailing) {
-                    if needsDanCount > 0 {
-                        Circle()
-                            .fill(.orange)
-                            .frame(width: 5, height: 5)
-                            .offset(x: 3, y: -2)
+            // Keep this slot reserved even when hidden; otherwise crossing
+            // the redline threshold shifts the gauge's menubar position.
+            Image(systemName: "flame.fill")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.red)
+                .opacity(isRedline ? 1 : 0)
+                .frame(width: Self.redlineSlotWidth, height: Self.glyphFrame)
+                .clipped()
+            ZStack(alignment: .topTrailing) {
+                Image(nsImage: GaugeIcon.menubarTemplateImage())
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.glyphDrawSize, height: Self.glyphDrawSize)
+                    .foregroundStyle(isRedline ? .red : .primary)
+                if needsDanCount > 0 {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: Self.needsDanDotSize, height: Self.needsDanDotSize)
+                        .offset(x: 1.5, y: -1)
                     }
-                }
+            }
+            .frame(width: Self.glyphFrame, height: Self.glyphFrame)
             Text(BlackGang.glanceLabel(for: reading))
                 .monospacedDigit()
+                .lineLimit(1)
                 .fontWeight(isRedline ? .bold : .regular)
+                .frame(width: Self.readoutWidth, alignment: .leading)
             if chartRoomUnseenCount > 0 {
                 Text("\(chartRoomUnseenCount)")
                     .font(.system(size: 9, weight: .bold))

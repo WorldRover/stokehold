@@ -108,6 +108,20 @@ enum PreviewRenderer {
                 name, to: dir, scale: 4
             )
         }
+        for value in [0, 7, 42, 100] {
+            let valueReading = BoilerReading(
+                cpuPercent: Double(value), ramPercent: reading.ramPercent, load1: reading.load1,
+                fleetCPUPercent: reading.fleetCPUPercent, fleetRAMPercent: reading.fleetRAMPercent
+            )
+            save(
+                MenuBarGaugeLabel(reading: valueReading, chartRoomUnseenCount: 0, needsDanCount: 3)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color(white: 0.13))
+                    .environment(\.colorScheme, .dark),
+                "menubar-label-value-\(value)", to: dir, scale: 4
+            )
+        }
         save(GaugeIcon.appIcon(needsDan: false), "app-icon-dan-0", to: dir)
         save(GaugeIcon.appIcon(needsDan: true), "app-icon-dan-3", to: dir)
     }

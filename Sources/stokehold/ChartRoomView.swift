@@ -46,6 +46,12 @@ struct ChartRoomView: View {
     /// d298 rework: default Dan-only, matching the panel's original pinned
     /// behavior — "All" is an opt-in broader view, not the default noise.
     @State private var showAllDocket = false
+    /// d355: which docket rows are tap-expanded to full text. Collapsed by
+    /// default (single-line truncated, matching the panel's original
+    /// density); tap toggles a row in/out, independent of d336's link-out
+    /// tap target (the icon), so expanding and opening-a-file never fight
+    /// on the same gesture.
+    @State private var expandedDocketRowIDs: Set<String> = []
 
     private var visibleDocketRows: [DocketRow] {
         showAllDocket ? docketRows : docketRows.filter(\.needsDan)
@@ -128,7 +134,7 @@ struct ChartRoomView: View {
 
     private func fileRow(_ file: PresentationFile, archived: Bool) -> some View {
         HStack {
-            Text(file.displayName)
+            Text(sidebarLabel(for: file))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(archived ? .secondary : .primary)
@@ -145,6 +151,26 @@ struct ChartRoomView: View {
                 model.setArchived(file, archived: !archived)
             }
         }
+    }
+
+    // d346: Dan hit two generations of one doc rendering as the IDENTICAL
+    // sidebar label (the epoch-prefix strip collapses "1784224462-d294-..."
+    // and a later "d294-..." to the same displayName) — read the stale one
+    // twice, unable to tell them apart. Defense-in-depth alongside the
+    // write-side warn in `skybridge present` (skybridge/presentations.py):
+    // this catches a collision regardless of how it got on disk. Checked
+    // against the FULL file list (not just the active or archived subset),
+    // since a collision between one of each is exactly as confusing.
+    private static let sidebarLabelDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd HH:mm"
+        return formatter
+    }()
+
+    private func sidebarLabel(for file: PresentationFile) -> String {
+        let collides = model.files.contains { $0.id != file.id && $0.displayName == file.displayName }
+        guard collides else { return file.displayName }
+        return "\(file.displayName) · \(Self.sidebarLabelDateFormatter.string(from: file.mtime))"
     }
 
     private var emptyState: some View {
@@ -219,23 +245,36 @@ struct ChartRoomView: View {
         // clickable — one tap from "what needs me" to "the thing to read".
         // Dumb filename-substring match (DocketFileLinking), no new schema.
         let linkedFile = DocketFileLinking.referencedFile(in: row.text, files: model.files)
-        return HStack(spacing: 8) {
+        // d355: single-line truncation gave no way to read a long row's
+        // full text — it just overflowed off the right edge. Tap toggles
+        // this row's own expand state (vertical growth, wraps, pushes
+        // rows below down); the link-out affordance is its own Button so
+        // it keeps its own tap target instead of fighting the row's.
+        let isExpanded = expandedDocketRowIDs.contains(row.id)
+        return HStack(alignment: .top, spacing: 8) {
             priorityIcon(for: row.pri)
             Text(row.id)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34, alignment: .leading)
             Text(row.text)
-                .lineLimit(1)
+                .lineLimit(isExpanded ? nil : 1)
                 .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: isExpanded)
                 // d303: docket rows carry docket ids, commit SHAs, URLs —
-                // same copy need as the reader itself.
+                // same copy need as the reader itself. Stays selectable
+                // expanded or collapsed.
                 .textSelection(.enabled)
             Spacer(minLength: 8)
-            if linkedFile != nil {
-                Image(systemName: "arrow.up.forward.square")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            if let linkedFile {
+                Button {
+                    selectedTag = linkedFile.id
+                } label: {
+                    Image(systemName: "arrow.up.forward.square")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
             if !row.linearId.isEmpty {
                 Text(row.linearId)
@@ -258,8 +297,10 @@ struct ChartRoomView: View {
         .padding(.vertical, 5)
         .contentShape(Rectangle())
         .onTapGesture {
-            if let linkedFile {
-                selectedTag = linkedFile.id
+            if isExpanded {
+                expandedDocketRowIDs.remove(row.id)
+            } else {
+                expandedDocketRowIDs.insert(row.id)
             }
         }
     }

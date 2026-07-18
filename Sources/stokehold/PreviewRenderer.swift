@@ -95,6 +95,16 @@ enum PreviewRenderer {
                 "docket-panel-live-dark", to: dir
             )
         }
+        let liveReading = BoilerMetrics.sample()
+        let liveNeedsDanCount = FleetConsole.sample()?.needsDanOpenCount ?? 0
+        save(
+            MenuBarGaugeLabel(reading: liveReading, chartRoomUnseenCount: 0, needsDanCount: liveNeedsDanCount)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color(white: 0.13))
+                .environment(\.colorScheme, .dark),
+            "menubar-label-live", to: dir, scale: 4
+        )
 
         // Menubar label states, rendered on a dark strip approximating the
         // menubar; scale 4 so the ~18pt label is legible in a proposal doc.
@@ -108,7 +118,7 @@ enum PreviewRenderer {
                 name, to: dir, scale: 4
             )
         }
-        for value in [0, 7, 42, 100] {
+        for value in [0, 7, 21, 42, 91, 100] {
             let valueReading = BoilerReading(
                 cpuPercent: Double(value), ramPercent: reading.ramPercent, load1: reading.load1,
                 fleetCPUPercent: reading.fleetCPUPercent, fleetRAMPercent: reading.fleetRAMPercent

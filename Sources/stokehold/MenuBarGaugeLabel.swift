@@ -3,8 +3,6 @@ import SwiftUI
 /// The macOS status-bar (menubar) item: a live brass gauge glyph whose needle
 /// tracks `cpuPercent`, plus the "NN psi" readout — replaces the old flat
 /// `"NN psi"` text label (Dan: "a bit boring looking, add any pizzazz?").
-/// Uses hysteresis around the redline threshold: flame turns on at 90 and
-/// turns back off below 80, so a noisy sample cannot flicker the menubar.
 struct MenuBarGaugeLabel: View {
     let reading: BoilerReading
     // d253: unseen Chart Room presentations — surfaced right on the
@@ -26,43 +24,38 @@ struct MenuBarGaugeLabel: View {
     var needsDanCount: Int = 0
 
     private static let redlineOnThreshold: Double = 90
-    private static let redlineOffThreshold: Double = 80
     private static let glyphFrame: CGFloat = 18
     private static let glyphDrawSize: CGFloat = 16
     private static let needsDanDotSize: CGFloat = 5.5
     private static let readoutWidth: CGFloat = 60
-    private static let redlineSlotWidth: CGFloat = 10
-
-    @State private var redlineActive = false
+    private static let redlineFlameSize: CGFloat = 8
 
     init(reading: BoilerReading, chartRoomUnseenCount: Int = 0, needsDanCount: Int = 0) {
         self.reading = reading
         self.chartRoomUnseenCount = chartRoomUnseenCount
         self.needsDanCount = needsDanCount
-        self._redlineActive = State(initialValue: reading.cpuPercent >= Self.redlineOnThreshold)
     }
 
     var body: some View {
         HStack(spacing: 3) {
-            // Keep this slot reserved even when hidden; otherwise crossing
-            // the redline threshold shifts the gauge's menubar position.
-            Image(systemName: "flame.fill")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.red)
-                .opacity(redlineActive ? 1 : 0)
-                .frame(width: Self.redlineSlotWidth, height: Self.glyphFrame)
-                .clipped()
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 Image(nsImage: GaugeIcon.menubarTemplateImage())
+                    .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
                     .frame(width: Self.glyphDrawSize, height: Self.glyphDrawSize)
-                    .foregroundStyle(.primary)
+                    .foregroundColor(.primary)
+                if redlineActive {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: Self.redlineFlameSize, weight: .bold))
+                        .foregroundStyle(.red)
+                        .offset(x: -6, y: 5)
+                }
                 if needsDanCount > 0 {
                     Circle()
                         .fill(.orange)
                         .frame(width: Self.needsDanDotSize, height: Self.needsDanDotSize)
-                        .offset(x: 2.25, y: -1.5)
+                        .offset(x: 7.25, y: -6.5)
                     }
             }
             .frame(width: Self.glyphFrame, height: Self.glyphFrame)
@@ -80,17 +73,9 @@ struct MenuBarGaugeLabel: View {
                     .background(Capsule().fill(.red))
             }
         }
-        .onAppear { updateRedline(for: reading.cpuPercent) }
-        .onChange(of: reading.cpuPercent) { value in
-            updateRedline(for: value)
-        }
     }
 
-    private func updateRedline(for value: Double) {
-        if value >= Self.redlineOnThreshold {
-            redlineActive = true
-        } else if value < Self.redlineOffThreshold {
-            redlineActive = false
-        }
+    private var redlineActive: Bool {
+        reading.cpuPercent >= Self.redlineOnThreshold
     }
 }

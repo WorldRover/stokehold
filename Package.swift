@@ -8,6 +8,10 @@ let package = Package(
         .executableTarget(
             name: "stokehold",
             resources: [.process("Resources")]
+        ),
+        .testTarget(
+            name: "stokeholdTests",
+            dependencies: ["stokehold"]
         )
     ]
 )

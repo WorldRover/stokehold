@@ -65,6 +65,44 @@ final class HTMLPreviewEncodingTests: XCTestCase {
         )
     }
 
+    /// d503 cross-review gap (mate4, not yet resolved): `loadFileURL(_:
+    /// allowingReadAccessTo:)` explicitly grants WKWebView's separate,
+    /// always-sandboxed WebContent process read access to a directory —
+    /// that's the whole reason the API parameter exists, independent of
+    /// whether the HOST app is App-Sandboxed. `load(_:mimeType:
+    /// characterEncodingName:baseURL:)` is a different WebKit entry point
+    /// with no documented equivalent grant, so switching APIs could
+    /// plausibly leave a sibling resource (e.g. `<img src="chart.png">`
+    /// next to the HTML file) unable to load even though the top-level
+    /// document renders fine.
+    ///
+    /// Attempted to verify empirically (a real sibling PNG, asserting its
+    /// decoded naturalWidth via JS) — and the SAME assertion fails
+    /// identically against the untouched, proven-in-production
+    /// `loadFileURL` call, not just the new `load(baseURL:)` one. That
+    /// means a bare `swift test` process (no full .app bundle / WindowServer
+    /// connection) apparently can't complete WKWebView subresource fetches
+    /// AT ALL — this harness cannot distinguish "the new API broke sibling
+    /// loading" from "headless XCTest can't load any subresource, old or
+    /// new". Skipping rather than asserting a result this harness can't
+    /// actually attribute — an XCTAssertEqual(1,1) that would pass for the
+    /// wrong reason is worse than an honest skip. Today's fleet convention
+    /// is self-contained HTML (inline CSS/JS/data-URI images) — no shipped
+    /// presentation currently references a sibling file — so shipping the
+    /// urgent encoding fix is not blocked on this, but the question is
+    /// GENUINELY OPEN and needs a real in-app check (launch the actual
+    /// Chart Room, preview a file with a real sibling image) before anyone
+    /// ships a presentation that uses one.
+    func testSiblingImageResourceLoading_NEEDS_REAL_APP_VERIFICATION() throws {
+        throw XCTSkip(
+            "headless XCTest cannot complete WKWebView subresource fetches even under the OLD " +
+            "loadFileURL call (verified: reverting to it reproduces the identical 0-byte failure) " +
+            "— this harness can't attribute a pass/fail here to the d503 change one way or the " +
+            "other. Needs manual verification in the real running app before any presentation " +
+            "relies on sibling resource references."
+        )
+    }
+
     private func evaluateBodyText(_ webView: WKWebView) throws -> String {
         let result = expectation(description: "js evaluated")
         var text = ""

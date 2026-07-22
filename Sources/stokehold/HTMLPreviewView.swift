@@ -35,8 +35,27 @@ struct HTMLPreviewView: NSViewRepresentable {
         // characterEncodingName:baseURL:)` — this bypasses charset
         // sniffing entirely, so the file's own declaration (or lack of
         // one) can no longer matter. `baseURL` stays the file's own
-        // directory so relative same-directory resources (a sibling
-        // image, say) still resolve, same as `loadFileURL` did.
+        // directory so a relative same-directory resource (a sibling
+        // image, say) still RESOLVES to the right URL.
+        //
+        // OPEN QUESTION (mate4 cross-review, not yet resolved): unlike
+        // `loadFileURL(_:allowingReadAccessTo:)`, this API has no
+        // documented equivalent grant of WebContent-process file-read
+        // access for that resolved sibling URL — resolving to the right
+        // path and actually being allowed to READ it are two different
+        // things. Attempted to verify empirically via a headless XCTest
+        // (see HTMLPreviewEncodingTests.testSiblingImageResourceStillLoadsViaBaseURL)
+        // but discovered the harness itself can't validate this either
+        // way — the SAME test fails identically against the untouched,
+        // proven-in-production `loadFileURL` call, so a bare `swift test`
+        // process apparently can't complete WKWebView subresource fetches
+        // at all (no full app bundle / WindowServer context). Today's
+        // fleet convention is self-contained HTML (inline CSS/JS/images as
+        // data URIs) — no shipped presentation currently references a
+        // sibling file — so this is believed low-risk, but genuinely
+        // UNVERIFIED for either the old or new code path. Needs a real
+        // in-app check (not headless XCTest) before anyone ships a
+        // presentation with sibling resource references.
         Self.loadUTF8(fileAt: url, into: webView)
     }
 

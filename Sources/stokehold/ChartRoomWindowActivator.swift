@@ -35,6 +35,15 @@ struct ChartRoomWindowActivator: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = probe.window else { return }
             NSApp.setActivationPolicy(.regular)
+            // `.regular` creates the app's FIRST real Dock tile. AppKit
+            // paints that fresh tile with the default unix-executable icon
+            // regardless of `applicationIconImage` already being set (from
+            // `.accessory`-era GaugeIcon.installAppIcon() calls, when no
+            // Dock tile existed yet to paint) — explicitly redisplay so the
+            // already-correct custom image actually lands on it. This is
+            // the reported "Chart Room's Dock icon is the ugly default exec
+            // icon" bug.
+            NSApp.dockTile.display()
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
 

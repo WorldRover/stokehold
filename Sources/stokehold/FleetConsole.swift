@@ -8,9 +8,9 @@ import Foundation
 /// subprocess — no skybridge source is modified to get this data.
 /// d298 rework: one live docket row, shaped for the Chart Room's Docket
 /// panel columns (id / priority / text / Linear mapping / owner). `pri`
-/// and `linearId` come from bosun/annunciator's own canonical helpers —
+/// and `linearId` come from docket/annunciator's own canonical helpers —
 /// NOT re-derived here — and `needsDan` is a tag computed against
-/// `bosun.dan_owned_open_items`'s own id set (the one owner-field filter
+/// `docket.dan_owned_open_items`'s own id set (the one owner-field filter
 /// per d324/d327/d333), not a second independent "is this for Dan" check. This is
 /// what lets the panel's Dan-only/all filter be a pure client-side toggle
 /// on ONE poll result rather than two separately-derived lists that could
@@ -83,15 +83,19 @@ enum FleetConsole {
     /// is inherently tied to one operator's local fleet setup, not a
     /// generic install.
     private static let skybridgeSrc = "/Users/drz/Projects/skybridge/src/skybridge"
-    private static let pmviewConfig = "/Users/drz/Projects/skybridge/pmview.json"
+    /// Skybridge d145 moved deployment state out of the repo root into
+    /// per-commission dirs; `pmview.json` at the root no longer exists.
+    private static let pmviewConfig =
+        "/Users/drz/Projects/skybridge/commissions/pmview/commission.json"
 
     private static let pythonScript = """
         import json, sys
         sys.path.insert(0, "\(skybridgeSrc)")
         from config import load_config
         from console import load_console_data, dispatch_lines, clean_marker
-        from docket import load_items, item_sort_key, RESOLVED_STATUS
-        from bosun import dan_owned_open_items
+        # dan_owned_open_items moved bosun.py -> docket.py when skybridge
+        # retired bosun (d501); it is the same function, same id set.
+        from docket import load_items, item_sort_key, RESOLVED_STATUS, dan_owned_open_items
         from annunciator import docket_linear_id
         config = load_config("\(pmviewConfig)")
         data = load_console_data(config)

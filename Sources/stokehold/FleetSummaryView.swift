@@ -18,6 +18,10 @@ import SwiftUI
 struct FleetSummaryView: View {
     let fleet: FleetSnapshot?
     let stale: Bool
+    /// The last console failure, if any. Present WITH a nil `fleet` means
+    /// the console has never once succeeded (#16) — reported as a fault
+    /// rather than as the cold-start "reading…" it used to masquerade as.
+    var error: FleetConsoleError?
     /// Injected by the App scene (`openWindow` lives there); defaults to a
     /// no-op so the view stays constructible in previews/renders.
     var openChartRoom: () -> Void = {}
@@ -36,6 +40,10 @@ struct FleetSummaryView: View {
                         Text("(stale)")
                             .font(.caption2)
                             .foregroundStyle(.orange)
+                            // #16: the reason was previously unreachable from
+                            // the UI — the badge said "old" but never "why."
+                            .help(error.map { "Last console read failed: \($0.summary)" }
+                                  ?? "The last console read failed")
                     }
                 }
 
@@ -56,11 +64,38 @@ struct FleetSummaryView: View {
                              help: "Open the Chart Room docket panel")
                 }
             }
+        } else if let error {
+            faultRow(error)
         } else {
             Text("Fleet — reading…")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// The console has never returned a sample. Red, not secondary-grey:
+    /// this is a broken app surface, not a pending one, and the whole point
+    /// of #16 is that it stops looking like the latter. The cause text is
+    /// shown verbatim (`ModuleNotFoundError: No module named 'bosun'`) so
+    /// the next skybridge drift diagnoses itself from the dropdown.
+    private func faultRow(_ error: FleetConsoleError) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                Text("Fleet console adrift")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+            }
+            .foregroundStyle(.red)
+
+            Text(error.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .help("stokehold could not read the fleet console — see the message for the cause")
     }
 
     /// The hero: the only row whose count means "Dan has to act." Bigger,

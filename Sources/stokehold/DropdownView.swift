@@ -8,6 +8,7 @@ struct DropdownView: View {
     let reading: BoilerReading
     let fleet: FleetSnapshot?
     let fleetStale: Bool
+    var fleetError: FleetConsoleError?
     let chartRoomUnseenCount: Int
     var openChartRoom: () -> Void = {}
 
@@ -24,13 +25,25 @@ struct DropdownView: View {
 
             Divider()
 
-            Text(BlackGang.statusLine(for: reading, hands: fleet?.crewCount))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // #17: hands below, not the whole roster — a down seat isn't
+            // shovelling. The roster total still shows in FleetSummaryView's
+            // "N crew" line just below.
+            Text(BlackGang.statusLine(
+                for: reading,
+                hands: fleet?.handsCount,
+                consoleFailed: fleetError != nil
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
 
             Divider()
 
-            FleetSummaryView(fleet: fleet, stale: fleetStale, openChartRoom: openChartRoom)
+            FleetSummaryView(
+                fleet: fleet,
+                stale: fleetStale,
+                error: fleetError,
+                openChartRoom: openChartRoom
+            )
 
             Divider()
 

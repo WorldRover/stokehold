@@ -59,13 +59,32 @@ enum PreviewRenderer {
                     .environment(\.colorScheme, scheme),
                 "dropdown-quiet-\(suffix)", to: dir
             )
+            // #16: the never-sampled fault state, rendered with the real
+            // failure that was live in main — so the surface that replaced
+            // the silent "reading…" is reviewable as a design artifact and
+            // not only reachable by breaking skybridge on purpose.
+            save(
+                DropdownView(
+                    reading: reading,
+                    fleet: nil,
+                    fleetStale: false,
+                    fleetError: .scriptFailed(
+                        status: 1,
+                        detail: "ModuleNotFoundError: No module named 'bosun'"
+                    ),
+                    chartRoomUnseenCount: 0
+                )
+                .background(bg)
+                .environment(\.colorScheme, scheme),
+                "dropdown-console-adrift-\(suffix)", to: dir
+            )
         }
 
         // The dropdown against the LIVE fleet (real console poll), plus the
         // Chart Room window with the live docket — so proposals can show
         // today's actual state, not only synthetic sample data. Skipped
         // silently if the console subprocess fails (e.g. no fleet running).
-        if let live = FleetConsole.sample() {
+        if case .success(let live) = FleetConsole.sample() {
             save(
                 DropdownView(reading: reading, fleet: live, fleetStale: false, chartRoomUnseenCount: 0)
                     .background(Color(white: 0.13))
@@ -96,7 +115,7 @@ enum PreviewRenderer {
             )
         }
         let liveReading = BoilerMetrics.sample()
-        let liveNeedsDanCount = FleetConsole.sample()?.needsDanOpenCount ?? 0
+        let liveNeedsDanCount = (try? FleetConsole.sample().get())?.needsDanOpenCount ?? 0
         save(
             MenuBarGaugeLabel(reading: liveReading, chartRoomUnseenCount: 0, needsDanCount: liveNeedsDanCount)
                 .padding(.horizontal, 8)

@@ -7,12 +7,25 @@ final class BoilerModel: ObservableObject {
         fleetCPUPercent: 0, fleetRAMPercent: 0
     )
     @Published var fleet: FleetSnapshot?
-    // d191: `FleetConsole.sample()` returns nil on any subprocess failure
-    // (non-zero exit, unparseable JSON) and the loop below used to just skip
-    // the update — leaving `fleet` frozen on whatever snapshot last
-    // succeeded, with no indication it had gone stale. Track that here so
-    // the UI can say so instead of quietly showing old crew state as live.
-    @Published var fleetStale: Bool = false
+    // d191: `FleetConsole.sample()` fails on any subprocess problem and the
+    // loop below used to just skip the update — leaving `fleet` frozen on
+    // whatever snapshot last succeeded, with no indication it had gone
+    // stale. Track the last failure here so the UI can say so instead of
+    // quietly showing old crew state as live.
+    //
+    // #16: d191's `fleetStale` flag only ever flipped true once a sample had
+    // ALREADY succeeded, so the case where NO sample ever lands — a retired
+    // skybridge import, a moved config path — left the app in its cold-start
+    // state permanently. `fleet == nil` and "everything is fine, still
+    // reading" were literally the same state. They are now three:
+    //
+    //   fleet == nil, error == nil  → cold start, first sample pending
+    //   fleet == nil, error != nil  → BROKEN, never sampled (the silent one)
+    //   fleet != nil, error != nil  → stale, last good sample still shown
+    @Published var fleetError: FleetConsoleError?
+
+    /// Showing a real but no-longer-refreshing snapshot.
+    var fleetStale: Bool { fleet != nil && fleetError != nil }
 
     private var loop: Task<Void, Never>?
     private var fleetLoop: Task<Void, Never>?
@@ -31,13 +44,16 @@ final class BoilerModel: ObservableObject {
         // own slower cadence — no reason to pay that spawn cost every 2s.
         fleetLoop = Task { [weak self] in
             while !Task.isCancelled {
-                let snapshot = await Task.detached { FleetConsole.sample() }.value
+                let result = await Task.detached { FleetConsole.sample() }.value
                 guard let self else { return }
-                if let snapshot {
+                switch result {
+                case .success(let snapshot):
                     self.fleet = snapshot
-                    self.fleetStale = false
-                } else if self.fleet != nil {
-                    self.fleetStale = true
+                    self.fleetError = nil
+                case .failure(let error):
+                    // Kept even when `fleet` is nil — that combination IS the
+                    // broken-and-never-sampled state the UI now reports.
+                    self.fleetError = error
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
@@ -68,6 +84,7 @@ struct StokeholdApp: App {
                 reading: model.reading,
                 fleet: model.fleet,
                 fleetStale: model.fleetStale,
+                fleetError: model.fleetError,
                 chartRoomUnseenCount: presentationsModel.unseenCount
             ) {
                 openWindow(id: "chart-room")

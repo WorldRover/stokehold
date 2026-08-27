@@ -48,6 +48,27 @@ struct FleetSnapshot: Decodable {
         fleetCapacity.values.reduce(0) { $0 + $1.count }
     }
 
+    /// Seats skybridge classes as DOWN or STALE — on the roster, but not
+    /// answering. Counted in `crewCount` (they are still crew) and excluded
+    /// from `handsCount` (they are not below).
+    var downCount: Int {
+        fleetCapacity["down"]?.count ?? 0
+    }
+
+    /// Hands actually below: the roster minus the seats that aren't
+    /// answering. This — not `crewCount` — is what the menubar status line
+    /// counts (#17, Dan's ruling).
+    ///
+    /// `crewCount` is the right number for the dropdown's "N crew" roster
+    /// line and stays as it was; it was the wrong number for "N hands
+    /// shovelling," which read "18 hands below" while every one of those 18
+    /// was down or on standby and none were working. Standby headless mates
+    /// DO count as hands — they're below and can take a turn; a down seat
+    /// can't.
+    var handsCount: Int {
+        crewCount - downCount
+    }
+
     var workingCount: Int {
         fleetCapacity["working"]?.count ?? 0
     }
@@ -74,6 +95,48 @@ struct FleetSnapshot: Decodable {
 
     var openDocketCount: Int {
         docketRows.count
+    }
+}
+
+/// Why a console sample failed. Every one of these used to collapse into a
+/// bare `nil`, which the app could not tell apart from "the first sample
+/// hasn't landed yet" — so a hard `ImportError` against a skybridge module
+/// retired months ago rendered as a permanent, reassuring "Reading the
+/// fleet…" (#16). The associated text is operator-facing: it is the thing
+/// that makes the NEXT drift self-diagnosing instead of silent.
+enum FleetConsoleError: Error, Equatable {
+    /// `python3` itself never started.
+    case launchFailed(String)
+    /// The script ran and exited non-zero — import errors, config-not-found,
+    /// anything skybridge raises. `detail` is the last meaningful stderr
+    /// line, which for a Python traceback is the exception line.
+    case scriptFailed(status: Int32, detail: String)
+    /// The script exited 0 but its JSON no longer matches `FleetSnapshot` —
+    /// i.e. skybridge changed shape rather than breaking outright.
+    case decodeFailed(String)
+    /// The subprocess never exited and was killed. Without this case the
+    /// poll loop would block forever inside one `sample()` — the dropdown
+    /// frozen on its last state with nothing to report, which is the very
+    /// failure mode #16 exists to eliminate, one layer down. Reachable in
+    /// practice: skybridge's config discovery walks directories, and a
+    /// `python3` blocked on a stalled mount or a held lock never returns.
+    case timedOut(seconds: Int)
+
+    /// One line, short enough for the dropdown. Deliberately names the
+    /// underlying cause rather than a generic "fleet unavailable."
+    var summary: String {
+        switch self {
+        case .launchFailed(let detail):
+            return "python3 wouldn't start: \(detail)"
+        case .scriptFailed(_, let detail) where !detail.isEmpty:
+            return detail
+        case .scriptFailed(let status, _):
+            return "console script exited \(status)"
+        case .decodeFailed(let detail):
+            return "console output didn't parse: \(detail)"
+        case .timedOut(let seconds):
+            return "console read timed out after \(seconds)s"
+        }
     }
 }
 
@@ -122,24 +185,127 @@ enum FleetConsole {
         }))
         """
 
-    static func sample() -> FleetSnapshot? {
+    /// Holds one pipe's bytes while a background queue drains it. A class so
+    /// the escaping read closure mutates one shared buffer rather than a
+    /// captured copy.
+    private final class DataBox {
+        var data = Data()
+    }
+
+    static func sample() -> Result<FleetSnapshot, FleetConsoleError> {
+        switch runPython(pythonScript) {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let outData):
+            return decodeSnapshot(outData)
+        }
+    }
+
+    /// Internal for tests: lets schema drift be exercised with a payload
+    /// rather than by mutating skybridge.
+    static func decodeSnapshot(_ data: Data) -> Result<FleetSnapshot, FleetConsoleError> {
+        do {
+            return .success(try JSONDecoder().decode(FleetSnapshot.self, from: data))
+        } catch {
+            return .failure(.decodeFailed(decodeDetail(for: error)))
+        }
+    }
+
+    /// Runs `script` under `python3` and returns its stdout. Split out of
+    /// `sample()` (internal, not private) so the failure paths — which are
+    /// the entire point of #16 — can be driven by tests with scripts that
+    /// fail on purpose, rather than only by breaking skybridge for real.
+    /// `timeout` is generous against the 5s poll cadence — it exists to stop
+    /// a wedged interpreter from freezing the loop, not to police a slow one.
+    static func runPython(_ script: String, timeout: Int = 10) -> Result<Data, FleetConsoleError> {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["python3", "-c", pythonScript]
+        process.arguments = ["python3", "-c", script]
 
         let outPipe = Pipe()
+        let errPipe = Pipe()
         process.standardOutput = outPipe
-        process.standardError = Pipe()
+        process.standardError = errPipe
 
         do {
             try process.run()
         } catch {
-            return nil
+            return .failure(.launchFailed(error.localizedDescription))
         }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
 
-        return try? JSONDecoder().decode(FleetSnapshot.self, from: data)
+        // Both pipes must be drained CONCURRENTLY. stderr was previously an
+        // unread `Pipe()` — worse than discarding it, because a child that
+        // filled stderr's buffer would block on write while we blocked
+        // reading stdout to EOF, and neither side could advance. A Python
+        // traceback is small enough to have always fit, so the hang was
+        // latent rather than observed; draining both closes it either way.
+        //
+        // Neither read happens on THIS thread, so the bounded wait below is
+        // genuinely bounded — a read that never sees EOF can't outlast it.
+        let outBox = DataBox()
+        let errBox = DataBox()
+        let io = DispatchGroup()
+        DispatchQueue.global(qos: .utility).async(group: io) {
+            outBox.data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        }
+        DispatchQueue.global(qos: .utility).async(group: io) {
+            errBox.data = errPipe.fileHandleForReading.readDataToEndOfFile()
+        }
+
+        if io.wait(timeout: .now() + .seconds(timeout)) == .timedOut {
+            // SIGTERM closes the pipes, which releases both reads. Give that
+            // a moment; if the child is ignoring signals, SIGKILL it so the
+            // reader threads can't be stranded either.
+            process.terminate()
+            if io.wait(timeout: .now() + .seconds(2)) == .timedOut {
+                kill(process.processIdentifier, SIGKILL)
+                _ = io.wait(timeout: .now() + .seconds(2))
+            }
+            return .failure(.timedOut(seconds: timeout))
+        }
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            return .failure(.scriptFailed(
+                status: process.terminationStatus,
+                detail: lastMeaningfulLine(of: errBox.data)
+            ))
+        }
+        let outData = outBox.data
+
+        return .success(outData)
+    }
+
+    /// The last non-blank stderr line. For a Python traceback that is the
+    /// exception line — `ModuleNotFoundError: No module named 'bosun'` —
+    /// which is exactly the sentence that identifies the drift.
+    static func lastMeaningfulLine(of data: Data) -> String {
+        let text = String(decoding: data, as: UTF8.self)
+        let line = text
+            .split(whereSeparator: \.isNewline)
+            .last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        // Long skybridge errors (ConfigNotFoundError prints a discovery
+        // list) would otherwise blow out the 250pt dropdown.
+        return line.count > 120 ? String(line.prefix(119)) + "…" : line
+    }
+
+    /// Names the offending key for the common `DecodingError` cases, so a
+    /// schema drift points at the field that moved rather than at "bad JSON."
+    private static func decodeDetail(for error: Error) -> String {
+        guard let error = error as? DecodingError else {
+            return error.localizedDescription
+        }
+        switch error {
+        case .keyNotFound(let key, _):
+            return "missing key '\(key.stringValue)'"
+        case .typeMismatch(_, let context), .valueNotFound(_, let context):
+            let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+            return path.isEmpty ? context.debugDescription : "wrong type at '\(path)'"
+        case .dataCorrupted(let context):
+            return context.debugDescription
+        @unknown default:
+            return "\(error)"
+        }
     }
 }

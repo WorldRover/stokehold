@@ -21,16 +21,21 @@ enum BlackGang {
         return steps.min(by: { abs($0.0 - percent) < abs($1.0 - percent) })!.1
     }
 
-    /// `hands` is the console.py-derived crew count (`FleetSnapshot.crewCount`
-    /// via `FleetConsole.sample()`), NOT `BoilerReading` — see the d229-
-    /// followup note on `BoilerReading` for why. `nil` means the first
-    /// console sample hasn't landed yet (cold start, same convention
-    /// `FleetSummaryView` already uses for its own "reading…" state) —
-    /// deliberately not defaulted to 0, which would misread as "genuinely no
+    /// `hands` is the console.py-derived count of crew actually below
+    /// (`FleetSnapshot.handsCount` via `FleetConsole.sample()`), NOT
+    /// `BoilerReading` — see the d229-followup note on `BoilerReading` for
+    /// why, and #17 for why it's `handsCount` rather than `crewCount`.
+    ///
+    /// `nil` means no snapshot. Which of the two reasons for that it is
+    /// depends on `consoleFailed`: cold start (first sample pending) reads
+    /// as "reading…", but a console that has never once succeeded says so
+    /// outright. Before #16 both were "Reading the fleet…" forever, which is
+    /// how a skybridge import retired months earlier went unnoticed.
+    /// Deliberately not defaulted to 0, which would misread as "genuinely no
     /// hands" instead of "not sampled yet."
-    static func statusLine(for reading: BoilerReading, hands: Int?) -> String {
+    static func statusLine(for reading: BoilerReading, hands: Int?, consoleFailed: Bool = false) -> String {
         guard let hands else {
-            return "Reading the fleet…"
+            return consoleFailed ? "Can't read the fleet — console adrift." : "Reading the fleet…"
         }
         switch (hands, reading.cpuPercent) {
         case (0, ..<15):
